@@ -100,7 +100,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for d in debt_items:
             note_str = f" - {d['note']}" if d.get("note") else ""
             debt_time = f" | Ngày nợ: {d['debt_date']}" if d.get("debt_date") else ""
-            lines.append(f"- **{d['person']}**: `{d['amount']:,.0f} VNĐ` [{d['status']}]{debt_time}{note_str}")
+            lines.append(f"• Mã GD: `{d['id']}` | **{d['person']}**: `{d['amount']:,.0f} VNĐ` [{d['status']}]{debt_time}{note_str}")
     else:
         lines.append("- (Không có khoản nợ nào trong tháng)")
 
@@ -219,6 +219,9 @@ async def debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
         raw_text = " ".join(context.args)
         raw_lower = raw_text.lower()
+        if any(kw in raw_lower for kw in ["chưa trả", "chua tra", "chưa nhận", "chua nhan"]):
+            await unpay_debt_command(update, context)
+            return
         if any(kw in raw_lower for kw in ["trả", "tra", "thanh toán", "thanh toan", "thu nợ", "hoàn thành"]):
             await pay_debt_command(update, context)
             return
@@ -248,17 +251,19 @@ async def debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "────────────────────────"
                 ]
                 for d in saved:
+                    lines.append(f"• Mã GD: `{d['id']}`")
                     lines.append(f"• Người liên quan: **{d['person']}**")
                     lines.append(f"• Số tiền: `{d['amount']:,.0f} {d['unit']}`")
                     if d.get("debt_date"):
                         lines.append(f"• Ngày nợ: {d['debt_date']}")
                     if d.get("note"):
                         lines.append(f"• Ghi chú: {d['note']}")
-                    lines.append(f"• Trạng thái: {d.get('status', 'Nợ')}")
+                    lines.append(f"• Trạng thái: **{d.get('status', 'Nợ')}**")
+                    lines.append("────────────────────────")
 
                 sheet_url = sheets_service.get_sheet_url()
                 if sheet_url:
-                    lines.append(f"\n[Mở Google Sheet]({sheet_url})")
+                    lines.append(f"[Mở Google Sheet]({sheet_url})")
                 await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
             except Exception as e:
                 await update.message.reply_text(f"Lỗi ghi vào Sổ Ghi Nợ: {str(e)}")
@@ -283,12 +288,14 @@ async def debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for item in items:
                 date_str = f" | Ngày: {item['debt_date']}" if item.get("debt_date") else ""
                 note_str = f" - {item['note']}" if item.get("note") else ""
-                lines.append(f"- **{item['person']}**: `{item['amount']:,.0f} VNĐ` [{item.get('status', 'Nợ')}]{date_str}{note_str}")
+                lines.append(f"• Mã GD: `{item['id']}` | **{item['person']}**: `{item['amount']:,.0f} VNĐ` [{item.get('status', 'Nợ')}]{date_str}{note_str}")
         else:
             lines.append("- (Chưa có khoản nợ nào trong sổ)")
 
         lines.append("────────────────────────")
-        lines.append("Ghi nợ nhanh: `/no <nội dung>` (vd: `/no Cho Nam vay 500k`)")
+        lines.append("• Ghi nợ: `/no <nội dung>` (vd: `/no Cho Nam vay 500k`)")
+        lines.append("• Báo đã trả: `/trano <Mã GD/Tên>`")
+        lines.append("• Báo chưa trả: `/chuatra <Mã GD/Tên>`")
 
         sheet_url = sheets_service.get_sheet_url()
         if sheet_url:
@@ -305,8 +312,8 @@ async def pay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "Vui lòng cung cấp Mã GD hoặc Tên người đã trả nợ.\n"
             "Ví dụ:\n"
-            "• `/trano NO260820F66D` (Hoàn thành trả nợ theo Mã GD)\n"
-            "• `/trano Tuấn Anh` (Hoàn thành trả hết nợ của Tuấn Anh)\n"
+            "• `/trano NO2608205754` (Đánh dấu đã trả theo Mã GD)\n"
+            "• `/trano Tuấn Anh` (Đánh dấu đã trả hết nợ của Tuấn Anh)\n"
             "• `/trano Tuấn Anh 200k` (Trả 1 phần 200k)",
             parse_mode="Markdown"
         )
@@ -337,16 +344,17 @@ async def pay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     is_full = (amount is None or amount <= 0)
 
-    updated_items = sheets_service.mark_debt_as_paid(
-        person=person,
+    updated_items = sheets_service.update_debt_status(
         debt_id=debt_id,
+        person=person,
+        status="Đã trả",
         amount=amount,
         is_full=is_full
     )
 
     if updated_items:
         lines = [
-            "**ĐÃ CẬP NHẬT TRẠNG THÁI SỔ NỢ**",
+            "✅ **ĐÃ CẬP NHẬT TRẠNG THÁI: ĐÃ TRẢ**",
             "────────────────────────"
         ]
         for item in updated_items:
@@ -371,6 +379,77 @@ async def pay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_str = f"mã `{debt_id}`" if debt_id else f"người **{person or raw_text}**"
         await update.message.reply_text(
             f"Không tìm thấy khoản nợ chưa trả nào của {target_str} trong Sổ Ghi Nợ.",
+            parse_mode="Markdown"
+        )
+
+async def unpay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Xử lý lệnh /chuatra, /unpaid: Chuyển trạng thái khoản nợ về 'Nợ' (chưa trả)."""
+    if not await check_user_access(update):
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "Vui lòng cung cấp Mã GD hoặc Tên người chưa trả nợ.\n"
+            "Ví dụ:\n"
+            "• `/chuatra NO2608205754` (Đổi lại trạng thái sang Nợ theo Mã GD)\n"
+            "• `/chuatra Tuấn Anh` (Đổi trạng thái của Tuấn Anh sang Nợ)\n"
+            "• `/chuatra Tuấn Anh 500k` (Khôi phục nợ 500k)",
+            parse_mode="Markdown"
+        )
+        return
+
+    raw_text = " ".join(context.args).strip()
+    await update.message.reply_chat_action("typing")
+
+    import re
+    debt_id = ""
+    match = re.search(r"\b(NO[0-9A-Za-z]{6,12})\b", raw_text, re.IGNORECASE)
+    if match:
+        debt_id = match.group(1).upper()
+        remaining_text = raw_text.replace(match.group(1), "").strip()
+    else:
+        remaining_text = raw_text
+
+    person = ""
+    amount = None
+    if remaining_text:
+        ai_res = ai_service.analyze_text(f"{remaining_text} nợ")
+        person = ai_res.get("person") or ""
+        amount = ai_res.get("amount")
+        if not person and not debt_id:
+            person = remaining_text
+
+    updated_items = sheets_service.update_debt_status(
+        debt_id=debt_id,
+        person=person,
+        status="Nợ",
+        amount=amount,
+        is_full=False
+    )
+
+    if updated_items:
+        lines = [
+            "🔄 **ĐÃ CHUYỂN TRẠNG THÁI: NỢ (CHƯA TRẢ)**",
+            "────────────────────────"
+        ]
+        for item in updated_items:
+            lines.append(f"• Mã GD: `{item['id']}`")
+            lines.append(f"• Người liên quan: **{item['person']}**")
+            lines.append(f"• Số tiền nợ: `{item['new_amount']:,.0f} VNĐ`")
+            lines.append("• Trạng thái mới: **Nợ**")
+            if item.get("note"):
+                lines.append(f"• Ghi chú: {item['note']}")
+            lines.append("────────────────────────")
+
+        sheet_url = sheets_service.get_sheet_url()
+        if sheet_url:
+            lines.append(f"[Mở Google Sheet]({sheet_url})")
+
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    else:
+        target_str = f"mã `{debt_id}`" if debt_id else f"người **{person or raw_text}**"
+        await update.message.reply_text(
+            f"Không tìm thấy khoản nợ nào phù hợp với {target_str} trong Sổ Ghi Nợ.",
             parse_mode="Markdown"
         )
 

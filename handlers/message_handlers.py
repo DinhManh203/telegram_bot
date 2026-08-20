@@ -97,12 +97,20 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
         return
 
-    # 1. Kiểm tra an toàn nhận diện sự kiện trả nợ / thanh toán nợ
-    has_pay_action = bool(re.search(r"\b(trả|đã trả|tra|da tra|thanh toán|thanh toan|hoàn thành|thu nợ|thu no|đòi nợ|doi no)\b", text_lower))
+    # 1. Kiểm tra yêu cầu CHƯA TRẢ NỢ / ĐÁNH DẤU NỢ LẠI (Chuyển trạng thái sang "Nợ")
+    has_unpay_action = bool(re.search(r"\b(chưa trả|chua tra|chưa nhận|chua nhan|chưa thanh toán|chua thanh toan|vẫn chưa trả|van chua tra|chưa trả nợ|chua tra no)\b", text_lower))
+    
+    # 2. Kiểm tra yêu cầu ĐÃ TRẢ NỢ (Chuyển trạng thái sang "Đã trả")
+    has_pay_action = bool(re.search(r"\b(đã trả|da tra|trả nợ|tra no|trả tiền|thanh toán|thanh toan|hoàn thành trả|thu nợ|thu no|đòi nợ|doi no)\b", text_lower))
+    if not has_pay_action and re.search(r"\btrả\b", text_lower) and not has_unpay_action:
+        has_pay_action = True
+
     expense_triggers = ["ăn phở", "ăn sáng", "ăn trưa", "ăn tối", "uống cafe", "đổ xăng", "mua áo", "mua sắm", "tiền điện", "tiền nước", "tiền nhà"]
     is_daily_expense = any(exp in text_lower for exp in expense_triggers)
 
-    if has_pay_action and not is_daily_expense:
+    if has_unpay_action and not is_daily_expense:
+        intent = "UNPAY_DEBT"
+    elif has_pay_action and not is_daily_expense:
         if intent in ("ADD_DEBT", "CHAT"):
             intent = "PAY_DEBT"
             debt_items = ai_result.get("debt_items", [])
@@ -130,30 +138,33 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 "────────────────────────"
             ]
             for d in saved_debts:
+                lines.append(f"• Mã GD: `{d['id']}`")
                 lines.append(f"• Người liên quan: **{d['person']}**")
                 lines.append(f"• Số tiền: `{d['amount']:,.0f} {d['unit']}`")
                 if d.get("debt_date"):
                     lines.append(f"• Ngày nợ: {d['debt_date']}")
                 if d.get("note"):
                     lines.append(f"• Ghi chú: {d['note']}")
-                lines.append(f"• Trạng thái: {d.get('status', 'Nợ')}")
+                lines.append(f"• Trạng thái: **{d.get('status', 'Nợ')}**")
+                lines.append("────────────────────────")
 
             sheet_url = sheets_service.get_sheet_url()
             if sheet_url:
-                lines.append(f"\n[Mở Google Sheet]({sheet_url})")
+                lines.append(f"[Mở Google Sheet]({sheet_url})")
 
             await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
         except Exception as e:
             await update.message.reply_text(f"Lỗi ghi vào Sổ Ghi Nợ: {str(e)}")
 
-    # 2. BÁO ĐÃ TRẢ NỢ / ĐÃ THU HỒI NỢ / HOÀN THÀNH TRẢ NỢ
-    elif intent == "PAY_DEBT":
+    # 2. XỬ LÝ CHUYỂN TRẠNG THÁI SỔ NỢ (ĐÃ TRẢ HOẶC CHƯA TRẢ NỢ)
+    elif intent in ("PAY_DEBT", "UNPAY_DEBT"):
+        target_status = "Nợ" if intent == "UNPAY_DEBT" else "Đã trả"
         person = ai_result.get("person") or ""
         debt_id = ai_result.get("debt_id") or ""
         amount = ai_result.get("amount")
         is_full = ai_result.get("is_full_payment", True)
 
-        # Regex trích xuất Mã GD nếu có trong câu (ví dụ NO260820ABB2, NO260820F66D)
+        # Regex trích xuất Mã GD nếu có trong câu (ví dụ NO2608205754, NO260820ABB2)
         if not debt_id:
             match = re.search(r"\b(NO[0-9A-Za-z]{6,12})\b", text, re.IGNORECASE)
             if match:
@@ -167,18 +178,18 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 if not amount:
                     amount = debt_items[0].get("amount")
 
-        # Nếu vẫn chưa có person, bóc tách từ text: "[Tên người] trả..."
+        # Nếu vẫn chưa có person, bóc tách từ text: "[Tên người] chưa trả / đã trả..."
         if not person and not debt_id:
-            m_person = re.search(r"([A-Za-zÀ-ỹ\s]+?)\s+(?:đã\s+)?(?:trả|thanh toán|thu nợ)", text, re.IGNORECASE)
+            m_person = re.search(r"([A-Za-zÀ-ỹ\s]+?)\s+(?:đã\s+|vẫn\s+|vừa\s+)?(?:trả|chưa trả|thanh toán|thu nợ)", text, re.IGNORECASE)
             if m_person:
                 person = m_person.group(1).strip()
             else:
-                m_person2 = re.search(r"(?:trả|thu nợ|thanh toán)\s+(?:nợ\s+)?(?:cho\s+)?([A-Za-zÀ-ỹ\s]+)", text, re.IGNORECASE)
+                m_person2 = re.search(r"(?:trả|chưa trả|thu nợ|thanh toán)\s+(?:nợ\s+)?(?:cho\s+)?([A-Za-zÀ-ỹ\s]+)", text, re.IGNORECASE)
                 if m_person2:
                     person = re.sub(r"\d+.*", "", m_person2.group(1)).strip()
 
-        # Nếu chưa có amount, kiểm tra regex số tiền (ví dụ: 500k, 500.000, 1tr, 2 củ)
-        if amount is None and not is_full:
+        # Nếu chưa có amount, kiểm tra regex số tiền
+        if amount is None and (not is_full or target_status == "Nợ"):
             m_amt = re.search(r"(\d+[\d\.,]*)\s*(k|cành|nghìn|ngàn|lốp|lít|củ|triệu|tr|m)?\b", text, re.IGNORECASE)
             if m_amt:
                 num_part = m_amt.group(1).replace(".", "").replace(",", "")
@@ -197,19 +208,21 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                     pass
 
         if not person and not debt_id:
-            await update.message.reply_text("Không nhận diện được tên người hoặc Mã GD trả nợ. Bạn hãy thử nhắn lại (vd: `Tuấn Anh đã trả nợ` hoặc `Mã NO260820ABB2 đã trả xong`).")
+            await update.message.reply_text("Không nhận diện được tên người hoặc Mã GD. Bạn hãy thử nhắn lại (vd: `Tuấn Anh đã trả nợ` hoặc `Mã NO2608205754 chưa trả`).")
             return
 
-        updated_items = sheets_service.mark_debt_as_paid(
-            person=person,
+        updated_items = sheets_service.update_debt_status(
             debt_id=debt_id,
+            person=person,
+            status=target_status,
             amount=amount,
             is_full=is_full
         )
 
         if updated_items:
+            title_str = "✅ **ĐÃ CẬP NHẬT TRẠNG THÁI: ĐÃ TRẢ**" if target_status == "Đã trả" else "🔄 **ĐÃ CHUYỂN TRẠNG THÁI: NỢ (CHƯA TRẢ)**"
             lines = [
-                "**ĐÃ CẬP NHẬT TRẠNG THÁI SỔ NỢ**",
+                title_str,
                 "────────────────────────"
             ]
             for item in updated_items:
@@ -219,8 +232,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                     lines.append(f"• Đã thanh toán: `{item['paid_amount']:,.0f} VNĐ` | Số dư nợ còn lại: `0 VNĐ`")
                     lines.append("• Trạng thái mới: **Đã trả**")
                 else:
-                    lines.append(f"• Đã trả: `{item['paid_amount']:,.0f} VNĐ` | Số dư nợ còn lại: `{item['new_amount']:,.0f} VNĐ`")
-                    lines.append("• Trạng thái: **Nợ**")
+                    lines.append(f"• Số tiền nợ: `{item['new_amount']:,.0f} VNĐ`")
+                    lines.append("• Trạng thái mới: **Nợ**")
                 if item.get("note"):
                     lines.append(f"• Ghi chú: {item['note']}")
                 lines.append("────────────────────────")
@@ -233,7 +246,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         else:
             target_str = f"mã `{debt_id}`" if debt_id else f"người **{person}**"
             await update.message.reply_text(
-                f"Không tìm thấy khoản nợ chưa trả nào của {target_str} trong Sổ Ghi Nợ.",
+                f"Không tìm thấy khoản nợ nào phù hợp với {target_str} trong Sổ Ghi Nợ.",
                 parse_mode="Markdown"
             )
 

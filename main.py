@@ -18,6 +18,7 @@ from handlers.command_handlers import (
     debt_command,
     expense_command,
     pay_debt_command,
+    unpay_debt_command,
     daily_report_job
 )
 from handlers.message_handlers import (
@@ -59,6 +60,9 @@ def main():
     app.add_handler(CommandHandler("tra", pay_debt_command))
     app.add_handler(CommandHandler("paydebt", pay_debt_command))
     app.add_handler(CommandHandler("thanhtoan", pay_debt_command))
+    app.add_handler(CommandHandler("chuatra", unpay_debt_command))
+    app.add_handler(CommandHandler("unpaid", unpay_debt_command))
+    app.add_handler(CommandHandler("chuatrano", unpay_debt_command))
     app.add_handler(CommandHandler("baocao", report_command))
     app.add_handler(CommandHandler("report", report_command))
     app.add_handler(CommandHandler("thongke", chart_command))
