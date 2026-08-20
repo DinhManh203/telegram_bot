@@ -433,25 +433,57 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý lệnh /xoa <Mã GD>."""
+    """Xử lý lệnh /xoa <Mã GD 1> [Mã GD 2] ..."""
     if not await check_user_access(update):
         return
 
     if not context.args or len(context.args) == 0:
         await update.message.reply_text(
             "Vui lòng cung cấp Mã GD cần xóa.\n"
-            "Ví dụ: `/xoa TX260820ABCD` hoặc `/xoa NO260820ABCD`"
+            "Ví dụ:\n"
+            "• `/xoa TX260820ABCD`\n"
+            "• `/xoa NO260820F66D NO260820ABB2` (Xóa nhiều mã)",
+            parse_mode="Markdown"
         )
         return
 
-    tx_id = context.args[0].strip()
+    import re
     user_id = update.effective_user.id
-    success = sheets_service.delete_transaction_by_id(tx_id, user_id=user_id)
+    raw_args = " ".join(context.args)
+    matched_ids = re.findall(r"\b((?:NO|TX)[0-9A-Za-z]{6,14})\b", raw_args, re.IGNORECASE)
+    if not matched_ids:
+        # Nếu người dùng chỉ gõ mã không có tiền tố NO/TX
+        matched_ids = [arg.strip().upper() for arg in context.args if arg.strip()]
 
-    if success:
-        await update.message.reply_text(f"Đã xóa thành công giao dịch `{tx_id}`.", parse_mode="Markdown")
-    else:
-        await update.message.reply_text(f"Không tìm thấy giao dịch `{tx_id}` trên bảng tính.", parse_mode="Markdown")
+    deleted_success = []
+    deleted_failed = []
+
+    for tid in matched_ids:
+        clean_tid = tid.strip().upper()
+        ok = sheets_service.delete_transaction_by_id(clean_tid, user_id=user_id)
+        if ok:
+            deleted_success.append(clean_tid)
+        else:
+            deleted_failed.append(clean_tid)
+
+    lines = []
+    if deleted_success:
+        lines.append("🗑️ **ĐÃ XÓA THÀNH CÔNG:**")
+        lines.append("────────────────────────")
+        for tid in deleted_success:
+            lines.append(f"• Mã GD: `{tid}`")
+    if deleted_failed:
+        if lines:
+            lines.append("────────────────────────")
+        lines.append("⚠️ **KHÔNG TÌM THẤY ĐỂ XÓA:**")
+        for tid in deleted_failed:
+            lines.append(f"• Mã GD: `{tid}`")
+
+    sheet_url = sheets_service.get_sheet_url()
+    if sheet_url:
+        lines.append(f"\n[Mở Google Sheet]({sheet_url})")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 async def link_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Xử lý lệnh /link lấy URL Google Sheet."""

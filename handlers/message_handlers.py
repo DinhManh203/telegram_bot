@@ -56,8 +56,48 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     intent = ai_result.get("intent", "CHAT")
     text_lower = text.lower()
 
+    # 0. Kiểm tra yêu cầu XÓA giao dịch / xóa khoản nợ theo Mã GD
+    delete_keywords = ["xóa", "xoa", "delete", "hủy", "huy", "remove"]
+    is_delete_request = any(kw in text_lower for kw in delete_keywords) or intent == "DELETE"
+    matched_ids = re.findall(r"\b((?:NO|TX)[0-9A-Za-z]{6,14})\b", text, re.IGNORECASE)
+    ai_delete_ids = ai_result.get("delete_ids", [])
+    if isinstance(ai_delete_ids, list):
+        for did in ai_delete_ids:
+            if did and did.upper() not in [m.upper() for m in matched_ids]:
+                matched_ids.append(did)
+
+    if is_delete_request and matched_ids:
+        deleted_success = []
+        deleted_failed = []
+        for tid in matched_ids:
+            clean_tid = tid.strip().upper()
+            ok = sheets_service.delete_transaction_by_id(clean_tid, user_id=user_id)
+            if ok:
+                deleted_success.append(clean_tid)
+            else:
+                deleted_failed.append(clean_tid)
+
+        lines = []
+        if deleted_success:
+            lines.append("🗑️ **ĐÃ XÓA THÀNH CÔNG:**")
+            lines.append("────────────────────────")
+            for tid in deleted_success:
+                lines.append(f"• Mã GD: `{tid}`")
+        if deleted_failed:
+            if lines:
+                lines.append("────────────────────────")
+            lines.append("⚠️ **KHÔNG TÌM THẤY ĐỂ XÓA:**")
+            for tid in deleted_failed:
+                lines.append(f"• Mã GD: `{tid}`")
+
+        sheet_url = sheets_service.get_sheet_url()
+        if sheet_url:
+            lines.append(f"\n[Mở Google Sheet]({sheet_url})")
+
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        return
+
     # 1. Kiểm tra an toàn nhận diện sự kiện trả nợ / thanh toán nợ
-    # Nếu câu có chứa từ "trả", "thanh toán", "thu nợ", "hoàn thành" và không phải là chi tiêu ăn uống/mua sắm hàng ngày
     has_pay_action = bool(re.search(r"\b(trả|đã trả|tra|da tra|thanh toán|thanh toan|hoàn thành|thu nợ|thu no|đòi nợ|doi no)\b", text_lower))
     expense_triggers = ["ăn phở", "ăn sáng", "ăn trưa", "ăn tối", "uống cafe", "đổ xăng", "mua áo", "mua sắm", "tiền điện", "tiền nước", "tiền nhà"]
     is_daily_expense = any(exp in text_lower for exp in expense_triggers)
@@ -71,6 +111,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                     ai_result["person"] = debt_items[0].get("person")
                 if not ai_result.get("amount"):
                     ai_result["amount"] = debt_items[0].get("amount")
+
+    # Kiểm tra nếu là câu hỏi/xác nhận tình trạng nợ hiện tại (vd: "vẫn đang nợ", "còn nợ bao nhiêu")
+    if any(q in text_lower for q in ["vẫn đang nợ", "vẫn nợ", "còn nợ", "đang nợ bao nhiêu", "nợ bao nhiêu"]):
+        intent = "QUERY_DEBT"
 
     # 1. GHI NHẬN VAY MƯỢN / GHI NỢ (LƯU VÀO TAB RIÊNG "SỔ GHI NỢ")
     if intent == "ADD_DEBT":
@@ -195,7 +239,40 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # 3. HỎI ĐÁP VỀ SỔ NỢ
     elif intent == "QUERY_DEBT":
-        await debt_command(update, context)
+        query_person = ai_result.get("person") or ""
+        if not query_person:
+            # Kiểm tra xem có tên người trong câu không
+            m_q = re.search(r"(?:nợ\s+của\s+|kiểm\s+tra\s+nợ\s+|nợ\s+)([A-Za-zÀ-ỹ\s]+)", text, re.IGNORECASE)
+            if m_q:
+                query_person = re.sub(r"(?:vẫn|đang|bao nhiêu|không|nhé|ạ).*", "", m_q.group(1)).strip()
+
+        debt_summary = sheets_service.get_debt_summary(user_id=user_id)
+        items = debt_summary.get("items", [])
+
+        if query_person:
+            person_clean = query_person.lower()
+            matched = [it for it in items if person_clean in it["person"].lower() or it["person"].lower() in person_clean]
+            if matched:
+                total_p = sum(it["amount"] for it in matched)
+                lines = [
+                    f"📒 **THÔNG TIN CÔNG NỢ CỦA {query_person.upper()}:**",
+                    "────────────────────────",
+                    f"• Tổng nợ hiện tại: `{total_p:,.0f} VNĐ`\n",
+                    "**Chi tiết các khoản:**"
+                ]
+                for it in matched:
+                    d_str = f" | Ngày: {it['debt_date']}" if it.get("debt_date") else ""
+                    n_str = f" - {it['note']}" if it.get("note") else ""
+                    lines.append(f"- Mã `{it['id']}`: `{it['amount']:,.0f} VNĐ` [{it['status']}]{d_str}{n_str}")
+                
+                sheet_url = sheets_service.get_sheet_url()
+                if sheet_url:
+                    lines.append(f"\n[Mở Google Sheet]({sheet_url})")
+                await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+            else:
+                await update.message.reply_text(f"Hiện tại **{query_person}** không có khoản nợ nào chưa trả trong sổ.", parse_mode="Markdown")
+        else:
+            await debt_command(update, context)
 
     # 4. GHI NHẬN CHI TIÊU / THU NHẬP (TAB SỔ CHI TIÊU)
     elif intent == "ADD_TRANSACTION":

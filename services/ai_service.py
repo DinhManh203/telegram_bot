@@ -41,10 +41,18 @@ QUY TẮC PHÂN LOẠI Ý ĐỊNH (INTENT):
       - "note": Ghi chú lý do nếu có nói rõ. Nếu không có thì để trống "".
       - "date": "{current_time}"
 
-3. "intent": "QUERY_DEBT" -> KHI NGƯỜI DÙNG HỎI VỀ DANH SÁCH NỢ:
+3. "intent": "QUERY_DEBT" -> KHI HỎI VỀ SỔ NỢ HOẶC XÁC NHẬN TÌNH TRẠNG NỢ HIỆN TẠI:
    - "Ai đang nợ tôi?", "Tôi đang nợ những ai?", "Xem sổ nợ", "Kiểm tra nợ", "Sổ ghi nợ"
+   - "Tuấn Anh vẫn đang nợ 500k nhé", "Tuấn Anh còn nợ bao nhiêu?", "Trịnh Dũng còn nợ không?", "Kiểm tra nợ Tuấn Anh"
+   => Trích xuất:
+      - "person": Tên người cần tra cứu nợ nếu có (ví dụ: "Tuấn Anh", "Trịnh Dũng", nếu hỏi chung thì null)
 
-4. "intent": "ADD_TRANSACTION" -> KHI NGƯỜI DÙNG GHI NHẬN CHI TIÊU / THU NHẬP THÔNG THƯỜNG:
+4. "intent": "DELETE" -> KHI NGƯỜI DÙNG YÊU CẦU XÓA GIAO DỊCH / XÓA KHOẢN NỢ THEO MÃ GD:
+   - "xóa mã NO260820F66D", "xóa 2 NO260820F66D NO260820ABB2 này", "xóa giao dịch TX2608201234", "hủy mã NO...", "xóa NO260820F66D"
+   => Trích xuất:
+      - "delete_ids": Mảng các mã GD cần xóa, ví dụ: ["NO260820F66D", "NO260820ABB2"]
+
+5. "intent": "ADD_TRANSACTION" -> KHI NGƯỜI DÙNG GHI NHẬN CHI TIÊU / THU NHẬP THÔNG THƯỜNG:
    - "Ăn phở 45k", "Đổ xăng 50k", "Mua áo 250k", "Lương về 15tr"
    => Trích xuất mảng "transactions" với các trường:
       - "amount": Số tiền nguyên dương (VNĐ)
@@ -53,10 +61,10 @@ QUY TẮC PHÂN LOẠI Ý ĐỊNH (INTENT):
       - "note": Mô tả ngắn gọn
       - "date": "{current_time}"
 
-5. "intent": "QUERY_STATS" -> KHI HỎI VỀ THỐNG KÊ CHI TIÊU:
+6. "intent": "QUERY_STATS" -> KHI HỎI VỀ THỐNG KÊ CHI TIÊU:
    - "Tháng này tiêu bao nhiêu rồi?", "Hôm nay ăn uống hết bao nhiêu?", "Báo cáo tháng này"
 
-6. "intent": "CHAT" -> Lời chào hỏi hoặc trò chuyện thông thường.
+7. "intent": "CHAT" -> Lời chào hỏi hoặc trò chuyện thông thường.
 
 QUY ĐỔI TIỀN TỆ TIẾNG VIỆT:
 - "k", "cành", "nghìn", "ngàn" -> * 1.000 (vd: 50k = 50000, 30 cành = 30000)
@@ -65,8 +73,9 @@ QUY ĐỔI TIỀN TỆ TIẾNG VIỆT:
 
 ĐỊNH DẠNG JSON TRẢ VỀ:
 {{
-  "intent": "ADD_DEBT" | "PAY_DEBT" | "QUERY_DEBT" | "ADD_TRANSACTION" | "QUERY_STATS" | "CHAT",
+  "intent": "ADD_DEBT" | "PAY_DEBT" | "QUERY_DEBT" | "DELETE" | "ADD_TRANSACTION" | "QUERY_STATS" | "CHAT",
   "debt_id": null,
+  "delete_ids": [],
   "person": null,
   "amount": null,
   "is_full_payment": true,
