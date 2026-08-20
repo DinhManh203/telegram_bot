@@ -5,6 +5,7 @@ import config
 from services.ai_service import ai_service
 from services.sheets_service import sheets_service
 from services.chart_service import chart_service
+from services.subscriber_service import save_subscriber
 from handlers.command_handlers import (
     check_user_access,
     report_command,
@@ -20,6 +21,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not await check_user_access(update):
         return
 
+    save_subscriber(update.effective_chat.id)
     text = update.message.text.strip()
     user = update.effective_user
     user_id = user.id
@@ -175,6 +177,7 @@ async def handle_photo_message(update: Update, context: ContextTypes.DEFAULT_TYP
     if not await check_user_access(update):
         return
 
+    save_subscriber(update.effective_chat.id)
     user = update.effective_user
     user_id = user.id
     user_name = user.full_name or user.username or "Unknown"

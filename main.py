@@ -16,12 +16,14 @@ from handlers.command_handlers import (
     delete_command,
     link_command,
     debt_command,
-    expense_command
+    expense_command,
+    daily_report_job
 )
 from handlers.message_handlers import (
     handle_text_message,
     handle_photo_message
 )
+from datetime import time
 
 # Cấu hình logging
 logging.basicConfig(
@@ -69,6 +71,12 @@ def main():
 
     # Đăng ký xử lý tin nhắn văn bản (chat tự nhiên, nút bấm)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+
+    # Cấu hình Cron Job tự động gửi báo cáo chi tiêu ngày lúc 21:00 hàng ngày (theo múi giờ Việt Nam)
+    if app.job_queue:
+        daily_time = time(hour=21, minute=0, second=0, tzinfo=config.TIMEZONE)
+        app.job_queue.run_daily(daily_report_job, time=daily_time, name="daily_21h_expense_report")
+        print("Đã thiết lập lịch gửi báo cáo tự động lúc 21:00 hàng ngày.")
 
     print("Bot đã sẵn sàng nhận tin nhắn trên Telegram.")
     # Bắt đầu chạy bot

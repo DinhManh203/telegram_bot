@@ -5,6 +5,7 @@ import config
 from services.sheets_service import sheets_service
 from services.chart_service import chart_service
 from services.ai_service import ai_service
+from services.subscriber_service import save_subscriber, get_all_subscribers
 
 # Bàn phím thao tác nhanh tối giản
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
@@ -30,6 +31,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user_access(update):
         return
 
+    save_subscriber(update.effective_chat.id)
     user = update.effective_user
     welcome_text = (
         f"Xin chào **{user.first_name}**!\n"
@@ -373,6 +375,7 @@ async def link_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user_access(update):
         return
 
+    save_subscriber(update.effective_chat.id)
     url = sheets_service.get_sheet_url()
     if url:
         await update.message.reply_text(
@@ -383,3 +386,48 @@ async def link_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await update.message.reply_text("Chưa kết nối được Google Sheet hoặc chưa tìm thấy URL.")
+
+async def daily_report_job(context: ContextTypes.DEFAULT_TYPE):
+    """Job gửi báo cáo chi tiêu tự động lúc 21:00 hàng ngày."""
+    chat_ids = get_all_subscribers()
+    if not chat_ids:
+        return
+
+    now = datetime.now(config.TIMEZONE)
+    today_str = now.strftime("%Y-%m-%d")
+
+    month_txs = sheets_service.get_transactions_by_month(month=now.month, year=now.year)
+    today_txs = [tx for tx in month_txs if tx.get("time", "").startswith(today_str)]
+
+    lines = [
+        f"**BÁO CÁO CHI TIÊU HÔM NAY ({now.strftime('%d/%m/%Y')} - 21:00)**",
+        "────────────────────────"
+    ]
+
+    if not today_txs:
+        lines.append("Hôm nay bạn chưa có giao dịch chi tiêu nào.")
+    else:
+        total_exp = sum(tx["amount"] for tx in today_txs if "thu" not in tx["type"].lower())
+        total_inc = sum(tx["amount"] for tx in today_txs if "thu" in tx["type"].lower())
+
+        lines.append(f"• Tổng chi hôm nay: `{total_exp:,.0f} VNĐ`")
+        if total_inc > 0:
+            lines.append(f"• Tổng thu nhập: `{total_inc:,.0f} VNĐ`")
+        lines.append("\nChi tiết các khoản chi:")
+        for tx in today_txs:
+            note_str = f" - {tx['note']}" if tx.get("note") else ""
+            lines.append(f"- [{tx['type']}] `{tx['amount']:,.0f} VNĐ`{note_str}")
+
+    lines.append("────────────────────────")
+    sheet_url = sheets_service.get_sheet_url()
+    if sheet_url:
+        lines.append(f"[Mở Google Sheet]({sheet_url})")
+
+    message_text = "\n".join(lines)
+
+    for cid in chat_ids:
+        try:
+            await context.bot.send_message(chat_id=cid, text=message_text, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Lỗi gửi báo cáo 21h tới chat_id {cid}: {e}")
+
