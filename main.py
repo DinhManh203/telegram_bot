@@ -34,12 +34,12 @@ def main():
     """Khởi chạy Telegram Bot."""
     if not config.TELEGRAM_BOT_TOKEN:
         print("=" * 60)
-        print("LOI: TELEGRAM_BOT_TOKEN chua duoc thiet lap!")
-        print("Vui long mo file .env va dien TELEGRAM_BOT_TOKEN tu @BotFather.")
+        print("LỖI: TELEGRAM_BOT_TOKEN chưa được thiết lập!")
+        print("Vui lòng mở file .env và điền TELEGRAM_BOT_TOKEN từ @BotFather.")
         print("=" * 60)
         sys.exit(1)
 
-    print("Dang khoi dong Telegram AI Expense Bot...")
+    print("Đang khởi động Telegram AI Expense Bot...")
     
     # Khởi tạo Application
     app = ApplicationBuilder().token(config.TELEGRAM_BOT_TOKEN).build()
@@ -70,7 +70,7 @@ def main():
     # Đăng ký xử lý tin nhắn văn bản (chat tự nhiên, nút bấm)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
-    print("Bot da san sang nhan tin nhan tren Telegram.")
+    print("Bot đã sẵn sàng nhận tin nhắn trên Telegram.")
     # Bắt đầu chạy bot
     app.run_polling()
 
