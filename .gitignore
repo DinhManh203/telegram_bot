@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+
+# Environment and secrets
+.env
+credentials.json
+service_account.json
+token.json
+
+# Logs & temp
+*.log
+temp/
+chart_*.png
+export_*.xlsx
+
+# IDE
+.vscode/
+.idea/
