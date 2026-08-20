@@ -223,31 +223,41 @@ class AIService:
         }
 
     def _analyze_image_gemini(self, image_bytes: bytes, prompt_instruction: str, prompt: str) -> Dict[str, Any]:
-        """Quét ảnh bằng Model chính (Google Gemini)."""
+        """Quét ảnh bằng Model chính (Google Gemini 2.0 Flash / 1.5 Flash)."""
         if not self.client:
             self._init_client()
             if not self.client:
                 raise Exception("Chưa cấu hình GEMINI_API_KEY.")
 
-        response = self.client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_text(text=prompt_instruction),
-                        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-                    ]
+        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+        last_err = None
+
+        for model_name in models_to_try:
+            try:
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=[
+                                types.Part.from_text(text=prompt_instruction),
+                                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+                            ]
+                        )
+                    ],
+                    config=types.GenerateContentConfig(
+                        system_instruction=prompt,
+                        response_mime_type="application/json",
+                        temperature=0.1
+                    )
                 )
-            ],
-            config=types.GenerateContentConfig(
-                system_instruction=prompt,
-                response_mime_type="application/json",
-                temperature=0.1
-            )
-        )
-        result_text = response.text.strip()
-        return _extract_json(result_text)
+                result_text = response.text.strip()
+                return _extract_json(result_text)
+            except Exception as err:
+                last_err = err
+                continue
+
+        raise last_err
 
     def _analyze_image_fallback(self, image_bytes: bytes, prompt_instruction: str, prompt: str) -> Dict[str, Any]:
         """Quét ảnh bằng Model dự phòng (OpenRouter Vision)."""
