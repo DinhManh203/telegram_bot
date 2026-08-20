@@ -84,11 +84,43 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception as e:
             await update.message.reply_text(f"Lỗi ghi vào Sổ Ghi Nợ: {str(e)}")
 
-    # 2. HỎI ĐÁP VỀ SỔ NỢ
+    # 2. BÁO ĐÃ TRẢ NỢ / ĐÃ THU HỒI NỢ
+    elif intent == "PAY_DEBT":
+        person = ai_result.get("person") or ""
+        amount = ai_result.get("amount")
+        if not person:
+            await update.message.reply_text("Không nhận diện được tên người đã trả nợ. Bạn hãy thử nhắn lại (vd: `Tuấn Anh đã trả nợ`).")
+            return
+
+        updated_items = sheets_service.mark_debt_as_paid(person=person, amount=amount)
+        if updated_items:
+            lines = [
+                "**ĐÃ CẬP NHẬT TRẠNG THÁI SỔ NỢ**",
+                "────────────────────────"
+            ]
+            for item in updated_items:
+                lines.append(f"• Người liên quan: **{item['person']}**")
+                lines.append(f"• Số tiền: `{item['amount']:,.0f} VNĐ`")
+                if item.get("note"):
+                    lines.append(f"• Ghi chú: {item['note']}")
+                lines.append("• Trạng thái mới: **Đã trả**")
+            
+            sheet_url = sheets_service.get_sheet_url()
+            if sheet_url:
+                lines.append(f"\n[Mở Google Sheet]({sheet_url})")
+
+            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        else:
+            await update.message.reply_text(
+                f"Không tìm thấy khoản nợ chưa trả nào của **{person}** trong Sổ Ghi Nợ.",
+                parse_mode="Markdown"
+            )
+
+    # 3. HỎI ĐÁP VỀ SỔ NỢ
     elif intent == "QUERY_DEBT":
         await debt_command(update, context)
 
-    # 3. GHI NHẬN CHI TIÊU / THU NHẬP (TAB SỔ CHI TIÊU)
+    # 4. GHI NHẬN CHI TIÊU / THU NHẬP (TAB SỔ CHI TIÊU)
     elif intent == "ADD_TRANSACTION":
         transactions = ai_result.get("transactions", [])
         if not transactions:

@@ -476,6 +476,52 @@ class SheetsService:
 
         return results
 
+    def mark_debt_as_paid(self, person: str, amount: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Tìm khoản nợ của một người trong Sổ Ghi Nợ và đổi trạng thái sang 'Đã trả'."""
+        if not self.debt_worksheet:
+            self._init_connection()
+            if not self.debt_worksheet:
+                return []
+
+        try:
+            all_vals = self.debt_worksheet.get_all_values()
+            if len(all_vals) <= 1:
+                return []
+
+            updated_items = []
+            person_clean = person.strip().lower()
+
+            # all_vals[0] là header
+            # Cột A: Mã GD (index 0)
+            # Cột D: Người vay/ Chủ nợ (index 3)
+            # Cột E: Số tiền (index 4)
+            # Cột G: Ghi chú (index 6)
+            # Cột H: Trạng thái (index 7)
+            for row_idx, row in enumerate(all_vals[1:], start=2):
+                if len(row) < 8:
+                    continue
+                r_person = row[3].strip().lower()
+                r_status = row[7].strip()
+
+                # So khớp tên người và trạng thái chưa trả
+                if (person_clean in r_person or r_person in person_clean) and r_status != "Đã trả":
+                    r_amount = parse_amount(row[4])
+                    if amount is not None and amount > 0 and r_amount != amount:
+                        continue
+
+                    self.debt_worksheet.update_cell(row_idx, 8, "Đã trả")
+                    updated_items.append({
+                        "id": row[0],
+                        "person": row[3],
+                        "amount": r_amount,
+                        "note": row[6] if len(row) > 6 else ""
+                    })
+
+            return updated_items
+        except Exception as e:
+            print(f"Lỗi cập nhật trạng thái nợ của {person}: {e}")
+            return []
+
     def get_debt_summary(self, user_id: Optional[int] = None) -> Dict[str, Any]:
         """Tổng hợp danh sách các khoản nợ từ Sổ Ghi Nợ."""
         if not self.debt_worksheet:

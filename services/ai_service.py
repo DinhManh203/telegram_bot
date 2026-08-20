@@ -16,24 +16,28 @@ Nhiệm vụ của bạn là phân tích tin nhắn của người dùng (hoặc
 Thời gian hệ thống hiện tại: {current_time}
 
 QUY TẮC PHÂN LOẠI Ý ĐỊNH (INTENT):
-1. "intent": "ADD_DEBT" -> KHI NGƯỜI DÙNG NHẮC ĐẾN VAY MƯỢN / CHO VAY / TRẢ NỢ / ĐÒI NỢ:
+1. "intent": "ADD_DEBT" -> KHI NGƯỜI DÙNG GHI KHOẢN NỢ/VAY MỚI:
    - Cho người khác mượn / vay: "Cho Nam vay 500k", "Nam mượn 200k", "Cho anh Hùng mượn 1 củ"
    - Mình đi vay / mượn người khác: "Vay Tuấn 1 triệu", "Mượn mẹ 2 củ", "Vay bạn 500k"
-   - Người khác trả nợ mình: "Nam trả nợ 500k", "Thu nợ anh Hùng 1tr"
-   - Mình trả nợ cho người khác: "Trả nợ Tuấn 1 triệu", "Trả tiền mượn mẹ 2tr"
    => Khi là ADD_DEBT, trích xuất mảng "debt_items":
       - "person": Tên người vay / người cho vay (ví dụ: "Doãn Tuấn Anh", "Trịnh Dũng", "Nam", "Tuấn")
-      - "debt_type": Một trong các loại: "Cho vay" | "Vay nợ" | "Thu nợ" | "Trả nợ"
+      - "debt_type": Một trong các loại: "Cho vay" | "Vay nợ"
       - "amount": Số tiền nguyên dương (VNĐ)
       - "debt_date": Ngày nợ (Ví dụ: nếu tin nhắn có ghi "ngày 15/8", "hôm qua", "20/07/2026" thì chuyển đổi chuẩn thành dạng "DD/MM/YYYY" hoặc "YYYY-MM-DD"). QUY TẮC BẮT BUỘC: Nếu trong tin nhắn KHÔNG có thời gian ngày/tháng thì BẮT BUỘC ĐỂ TRỐNG "" (chuỗi rỗng), KHÔNG ĐƯỢC tự ý điền ngày hôm nay!
-      - "status": "Nợ" (đối với Cho vay / Vay nợ / còn nợ) hoặc "Đã trả" (đối với Thu nợ / Trả nợ / đã hoàn tất)
-      - "note": Ghi chú lý do nếu người dùng có nói rõ (vd: "tiền mua sách", "tiền liên hoan"). QUY TẮC BẮT BUỘC: Nếu người dùng không nói rõ lý do (ví dụ chỉ nói: "Trịnh Dũng nợ 122k", "Cho Nam vay 500k") thì BẮT BUỘC ĐỂ TRỐNG "" (chuỗi rỗng), TUYỆT ĐỐI KHÔNG TỰ BỊA GHI CHÚ!
+      - "status": "Nợ"
+      - "note": Ghi chú lý do nếu người dùng có nói rõ (vd: "tiền mua sách", "tiền liên hoan"). Nếu không có thì để trống "".
       - "date": "{current_time}"
 
-2. "intent": "QUERY_DEBT" -> KHI NGƯỜI DÙNG HỎI VỀ DANH SÁCH NỢ:
+2. "intent": "PAY_DEBT" -> KHI NGƯỜI DÙNG BÁO AI ĐÓ ĐÃ TRẢ NỢ HOẶC BẢN THÂN ĐÃ TRẢ NỢ XONG:
+   - "Tuấn Anh đã trả nợ nhé", "Nam trả hết nợ rồi", "Đã thu nợ anh Hùng", "Tôi đã trả nợ Tuấn", "Trịnh Dũng đã thanh toán"
+   => Trích xuất:
+      - "person": Tên người liên quan (ví dụ: "Tuấn Anh", "Doãn Tuấn Anh", "Nam", "Trịnh Dũng")
+      - "amount": Số tiền nếu có nói rõ (ví dụ: "Nam trả 500k" -> 500000), nếu không nói số tiền thì để null.
+
+3. "intent": "QUERY_DEBT" -> KHI NGƯỜI DÙNG HỎI VỀ DANH SÁCH NỢ:
    - "Ai đang nợ tôi?", "Tôi đang nợ những ai?", "Xem sổ nợ", "Kiểm tra nợ"
 
-3. "intent": "ADD_TRANSACTION" -> KHI NGƯỜI DÙNG GHI NHẬN CHI TIÊU / THU NHẬP THÔNG THƯỜNG:
+4. "intent": "ADD_TRANSACTION" -> KHI NGƯỜI DÙNG GHI NHẬN CHI TIÊU / THU NHẬP THÔNG THƯỜNG:
    - "Ăn phở 45k", "Đổ xăng 50k", "Mua áo 250k", "Lương về 15tr"
    => Trích xuất mảng "transactions" với các trường:
       - "amount": Số tiền nguyên dương (VNĐ)
@@ -42,10 +46,10 @@ QUY TẮC PHÂN LOẠI Ý ĐỊNH (INTENT):
       - "note": Mô tả ngắn gọn
       - "date": "{current_time}"
 
-4. "intent": "QUERY_STATS" -> KHI HỎI VỀ THỐNG KÊ CHI TIÊU:
+5. "intent": "QUERY_STATS" -> KHI HỎI VỀ THỐNG KÊ CHI TIÊU:
    - "Tháng này tiêu bao nhiêu rồi?", "Hôm nay ăn uống hết bao nhiêu?", "Báo cáo tháng này"
 
-5. "intent": "CHAT" -> Lời chào hỏi hoặc trò chuyện thông thường.
+6. "intent": "CHAT" -> Lời chào hỏi hoặc trò chuyện thông thường.
 
 QUY ĐỔI TIỀN TỆ TIẾNG VIỆT:
 - "k", "cành", "nghìn", "ngàn" -> * 1.000 (vd: 50k = 50000, 30 cành = 30000)
@@ -54,13 +58,15 @@ QUY ĐỔI TIỀN TỆ TIẾNG VIỆT:
 
 ĐỊNH DẠNG JSON TRẢ VỀ:
 {{
-  "intent": "ADD_DEBT" | "QUERY_DEBT" | "ADD_TRANSACTION" | "QUERY_STATS" | "CHAT",
+  "intent": "ADD_DEBT" | "PAY_DEBT" | "QUERY_DEBT" | "ADD_TRANSACTION" | "QUERY_STATS" | "CHAT",
+  "person": "Tuấn Anh",
+  "amount": null,
   "debt_items": [
     {{
       "person": "Nam",
       "debt_type": "Cho vay",
       "amount": 500000,
-      "status": "Chưa trả",
+      "status": "Nợ",
       "note": "Cho vay tiền",
       "date": "{current_time}"
     }}
@@ -107,7 +113,7 @@ def _extract_json(raw_text: str) -> Dict[str, Any]:
     if start != -1 and end != -1 and end > start:
         return json.loads(cleaned[start:end+1])
 
-    raise Exception(f"Không thể trích xuất JSON hợp lệ từ phản hồi AI.")
+    raise Exception("Không thể trích xuất JSON hợp lệ từ phản hồi AI.")
 
 class AIService:
     def __init__(self):
@@ -126,30 +132,41 @@ class AIService:
             print(f"Lỗi khởi tạo Gemini Client: {e}")
 
     def _analyze_text_gemini(self, text: str, prompt: str) -> Dict[str, Any]:
-        """Phân tích văn bản bằng Model chính (Google Gemini)."""
+        """Phân tích văn bản bằng Model chính (Google Gemini 2.0 Flash / 1.5 Flash)."""
         if not self.client:
             self._init_client()
             if not self.client:
                 raise Exception("Chưa cấu hình GEMINI_API_KEY.")
 
-        response = self.client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_text(text=f"Phân tích tin nhắn sau:\n{text}")
-                    ]
+        # Thử gemini-2.0-flash trước (ổn định GA, không bị 503), nếu lỗi thử gemini-1.5-flash
+        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+        last_err = None
+
+        for model_name in models_to_try:
+            try:
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=[
+                                types.Part.from_text(text=f"Phân tích tin nhắn sau:\n{text}")
+                            ]
+                        )
+                    ],
+                    config=types.GenerateContentConfig(
+                        system_instruction=prompt,
+                        response_mime_type="application/json",
+                        temperature=0.1
+                    )
                 )
-            ],
-            config=types.GenerateContentConfig(
-                system_instruction=prompt,
-                response_mime_type="application/json",
-                temperature=0.1
-            )
-        )
-        result_text = response.text.strip()
-        return _extract_json(result_text)
+                result_text = response.text.strip()
+                return _extract_json(result_text)
+            except Exception as err:
+                last_err = err
+                continue
+
+        raise last_err
 
     def _analyze_text_fallback(self, text: str, prompt: str) -> Dict[str, Any]:
         """Phân tích văn bản bằng Model dự phòng (OpenRouter / OpenAI-compatible)."""
