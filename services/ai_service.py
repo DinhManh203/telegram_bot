@@ -132,41 +132,31 @@ class AIService:
             print(f"Lỗi khởi tạo Gemini Client: {e}")
 
     def _analyze_text_gemini(self, text: str, prompt: str) -> Dict[str, Any]:
-        """Phân tích văn bản bằng Model chính (Google Gemini 2.0 Flash / 1.5 Flash)."""
+        """Phân tích văn bản bằng Model chính (Google Gemini 2.5 Flash)."""
         if not self.client:
             self._init_client()
             if not self.client:
                 raise Exception("Chưa cấu hình GEMINI_API_KEY.")
 
-        # Thử gemini-2.0-flash trước (ổn định GA, không bị 503), nếu lỗi thử gemini-1.5-flash
-        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
-        last_err = None
-
-        for model_name in models_to_try:
-            try:
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=[
-                        types.Content(
-                            role="user",
-                            parts=[
-                                types.Part.from_text(text=f"Phân tích tin nhắn sau:\n{text}")
-                            ]
-                        )
-                    ],
-                    config=types.GenerateContentConfig(
-                        system_instruction=prompt,
-                        response_mime_type="application/json",
-                        temperature=0.1
-                    )
+        response = self.client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(text=f"Phân tích tin nhắn sau:\n{text}")
+                    ]
                 )
-                result_text = response.text.strip()
-                return _extract_json(result_text)
-            except Exception as err:
-                last_err = err
-                continue
-
-        raise last_err
+            ],
+            config=types.GenerateContentConfig(
+                system_instruction=prompt,
+                response_mime_type="application/json",
+                temperature=0.1,
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+            )
+        )
+        result_text = response.text.strip()
+        return _extract_json(result_text)
 
     def _analyze_text_fallback(self, text: str, prompt: str) -> Dict[str, Any]:
         """Phân tích văn bản bằng Model dự phòng (OpenRouter / OpenAI-compatible)."""
@@ -223,41 +213,32 @@ class AIService:
         }
 
     def _analyze_image_gemini(self, image_bytes: bytes, prompt_instruction: str, prompt: str) -> Dict[str, Any]:
-        """Quét ảnh bằng Model chính (Google Gemini 2.0 Flash / 1.5 Flash)."""
+        """Quét ảnh bằng Model chính (Google Gemini 2.5 Flash)."""
         if not self.client:
             self._init_client()
             if not self.client:
                 raise Exception("Chưa cấu hình GEMINI_API_KEY.")
 
-        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
-        last_err = None
-
-        for model_name in models_to_try:
-            try:
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=[
-                        types.Content(
-                            role="user",
-                            parts=[
-                                types.Part.from_text(text=prompt_instruction),
-                                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-                            ]
-                        )
-                    ],
-                    config=types.GenerateContentConfig(
-                        system_instruction=prompt,
-                        response_mime_type="application/json",
-                        temperature=0.1
-                    )
+        response = self.client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(text=prompt_instruction),
+                        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+                    ]
                 )
-                result_text = response.text.strip()
-                return _extract_json(result_text)
-            except Exception as err:
-                last_err = err
-                continue
-
-        raise last_err
+            ],
+            config=types.GenerateContentConfig(
+                system_instruction=prompt,
+                response_mime_type="application/json",
+                temperature=0.1,
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+            )
+        )
+        result_text = response.text.strip()
+        return _extract_json(result_text)
 
     def _analyze_image_fallback(self, image_bytes: bytes, prompt_instruction: str, prompt: str) -> Dict[str, Any]:
         """Quét ảnh bằng Model dự phòng (OpenRouter Vision)."""
