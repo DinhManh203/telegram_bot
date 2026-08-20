@@ -361,7 +361,31 @@ async def pay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ai_res = ai_service.analyze_text(f"{remaining_text} trả nợ")
         person = ai_res.get("person") or ""
         amount = ai_res.get("amount")
-        if not person and not debt_id:
+
+    # Regex trích xuất số tiền nếu có
+    if amount is None:
+        m_amt = re.search(r"(\d+[\d\.,]*)\s*(k|cành|nghìn|ngàn|lốp|lít|củ|triệu|tr|m)?\b", raw_text, re.IGNORECASE)
+        if m_amt:
+            num_part = m_amt.group(1).replace(".", "").replace(",", "")
+            unit_part = (m_amt.group(2) or "").lower()
+            try:
+                num = float(num_part)
+                if unit_part in ("k", "cành", "nghìn", "ngàn"):
+                    num *= 1000
+                elif unit_part in ("lốp", "lít"):
+                    num *= 100000
+                elif unit_part in ("củ", "triệu", "tr", "m"):
+                    num *= 1000000
+                if num > 0:
+                    amount = int(num)
+            except Exception:
+                pass
+
+    if not person and not debt_id:
+        m_p = re.search(r"([A-Za-zÀ-ỹ\s]+?)(?:\s+(?:đã|trả|vẫn|còn|nợ|\d).*|$)", remaining_text)
+        if m_p:
+            person = m_p.group(1).strip()
+        else:
             person = remaining_text
 
     is_full = (amount is None or amount <= 0)
@@ -438,7 +462,31 @@ async def unpay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         ai_res = ai_service.analyze_text(f"{remaining_text} nợ")
         person = ai_res.get("person") or ""
         amount = ai_res.get("amount")
-        if not person and not debt_id:
+
+    # Regex trích xuất số tiền nếu có
+    if amount is None:
+        m_amt = re.search(r"(\d+[\d\.,]*)\s*(k|cành|nghìn|ngàn|lốp|lít|củ|triệu|tr|m)?\b", raw_text, re.IGNORECASE)
+        if m_amt:
+            num_part = m_amt.group(1).replace(".", "").replace(",", "")
+            unit_part = (m_amt.group(2) or "").lower()
+            try:
+                num = float(num_part)
+                if unit_part in ("k", "cành", "nghìn", "ngàn"):
+                    num *= 1000
+                elif unit_part in ("lốp", "lít"):
+                    num *= 100000
+                elif unit_part in ("củ", "triệu", "tr", "m"):
+                    num *= 1000000
+                if num > 0:
+                    amount = int(num)
+            except Exception:
+                pass
+
+    if not person and not debt_id:
+        m_p = re.search(r"([A-Za-zÀ-ỹ\s]+?)(?:\s+(?:vẫn|còn|đang|chưa|nợ|\d).*|$)", remaining_text)
+        if m_p:
+            person = m_p.group(1).strip()
+        else:
             person = remaining_text
 
     updated_items = sheets_service.update_debt_status(
