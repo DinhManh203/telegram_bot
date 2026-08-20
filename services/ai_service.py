@@ -84,6 +84,31 @@ QUY ĐỔI TIỀN TỆ TIẾNG VIỆT:
 }}
 """
 
+def _extract_json(raw_text: str) -> Dict[str, Any]:
+    """Trích xuất và phân tích JSON an toàn từ phản hồi của các model AI."""
+    cleaned = raw_text.strip()
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    if "```json" in cleaned:
+        cleaned = cleaned.split("```json", 1)[1].split("```", 1)[0].strip()
+    elif "```" in cleaned:
+        cleaned = cleaned.split("```", 1)[1].split("```", 1)[0].strip()
+
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    start = cleaned.find('{')
+    end = cleaned.rfind('}')
+    if start != -1 and end != -1 and end > start:
+        return json.loads(cleaned[start:end+1])
+
+    raise Exception(f"Không thể trích xuất JSON hợp lệ từ phản hồi AI.")
+
 class AIService:
     def __init__(self):
         self.client: Optional[genai.Client] = None
@@ -124,7 +149,7 @@ class AIService:
             )
         )
         result_text = response.text.strip()
-        return json.loads(result_text)
+        return _extract_json(result_text)
 
     def _analyze_text_fallback(self, text: str, prompt: str) -> Dict[str, Any]:
         """Phân tích văn bản bằng Model dự phòng (OpenRouter / OpenAI-compatible)."""
@@ -144,16 +169,15 @@ class AIService:
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": f"Phân tích tin nhắn sau:\n{text}"}
             ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"}
+            "temperature": 0.1
         }
 
-        res = httpx.post(url, headers=headers, json=payload, timeout=30.0)
+        res = httpx.post(url, headers=headers, json=payload, timeout=35.0)
         if res.status_code != 200:
             raise Exception(f"Fallback Model trả về mã lỗi {res.status_code}: {res.text[:200]}")
 
         content = res.json()["choices"][0]["message"]["content"]
-        return json.loads(content)
+        return _extract_json(content)
 
     def analyze_text(self, text: str) -> Dict[str, Any]:
         """Phân tích tin nhắn văn bản với cơ chế tự động chuyển sang Model dự phòng khi lỗi."""
@@ -206,10 +230,10 @@ class AIService:
             )
         )
         result_text = response.text.strip()
-        return json.loads(result_text)
+        return _extract_json(result_text)
 
     def _analyze_image_fallback(self, image_bytes: bytes, prompt_instruction: str, prompt: str) -> Dict[str, Any]:
-        """Quét ảnh bằng Model dự phòng (OpenRouter GPT-4o Vision)."""
+        """Quét ảnh bằng Model dự phòng (OpenRouter Vision)."""
         if not config.FALLBACK_AI_API_KEY:
             raise Exception("Chưa cấu hình FALLBACK_AI_API_KEY.")
 
@@ -235,8 +259,7 @@ class AIService:
                     ]
                 }
             ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"}
+            "temperature": 0.1
         }
 
         res = httpx.post(url, headers=headers, json=payload, timeout=40.0)
@@ -244,7 +267,7 @@ class AIService:
             raise Exception(f"Fallback Model trả về mã lỗi {res.status_code}: {res.text[:200]}")
 
         content = res.json()["choices"][0]["message"]["content"]
-        return json.loads(content)
+        return _extract_json(content)
 
     def analyze_image(self, image_bytes: bytes, caption: Optional[str] = None) -> Dict[str, Any]:
         """Phân tích ảnh chụp hóa đơn / biên lai với cơ chế tự động chuyển đổi sang Model dự phòng."""
