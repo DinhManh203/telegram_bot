@@ -59,16 +59,30 @@ class SheetsService:
         self._init_connection()
 
     def _init_connection(self):
-        """Khởi tạo kết nối với Google Sheets."""
-        if not os.path.exists(config.GOOGLE_CREDENTIALS_FILE):
-            print(f"⚠️ Cảnh báo: File credentials '{config.GOOGLE_CREDENTIALS_FILE}' không tồn tại. Vui lòng cấu hình Google Service Account.")
+        """Khởi tạo kết nối với Google Sheets từ file hoặc biến môi trường JSON."""
+        creds = None
+        if config.GOOGLE_CREDENTIALS_JSON:
+            try:
+                import json
+                info = json.loads(config.GOOGLE_CREDENTIALS_JSON)
+                creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+            except Exception as e:
+                print(f"❌ Lỗi đọc GOOGLE_CREDENTIALS_JSON từ biến môi trường: {e}")
+
+        if not creds and os.path.exists(config.GOOGLE_CREDENTIALS_FILE):
+            try:
+                creds = Credentials.from_service_account_file(
+                    config.GOOGLE_CREDENTIALS_FILE,
+                    scopes=SCOPES
+                )
+            except Exception as e:
+                print(f"❌ Lỗi đọc Google credentials file: {e}")
+
+        if not creds:
+            print("⚠️ Cảnh báo: Chưa cấu hình Google Service Account (file credentials hoặc biến GOOGLE_CREDENTIALS_JSON).")
             return
 
         try:
-            creds = Credentials.from_service_account_file(
-                config.GOOGLE_CREDENTIALS_FILE,
-                scopes=SCOPES
-            )
             self.client = gspread.authorize(creds)
             self._get_or_create_sheet()
             self._get_or_create_debt_sheet()

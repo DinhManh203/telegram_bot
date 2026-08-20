@@ -17,6 +17,7 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GOOGLE_CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json").strip()
+GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON", "").strip()
 SPREADSHEET_ID_OR_NAME = os.getenv("SPREADSHEET_ID_OR_NAME", "Chi Tieu Ca Nhan").strip()
 TIMEZONE_STR = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh").strip()
 
