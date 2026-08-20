@@ -31,6 +31,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user_access(update):
         return
 
+    await update.message.reply_chat_action("typing")
     save_subscriber(update.effective_chat.id)
     user = update.effective_user
     welcome_text = (
@@ -49,6 +50,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user_access(update):
         return
 
+    await update.message.reply_chat_action("typing")
     user_id = update.effective_user.id
     now = datetime.now(config.TIMEZONE)
     target_month = now.month
@@ -116,6 +118,7 @@ async def chart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user_access(update):
         return
 
+    await update.message.reply_chat_action("upload_photo")
     user_id = update.effective_user.id
     now = datetime.now(config.TIMEZONE)
     target_month = now.month
@@ -132,15 +135,34 @@ async def chart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     summary = sheets_service.get_monthly_summary(user_id=user_id, month=target_month, year=target_year)
     total_expense = summary["total_expense"]
 
-    await update.message.reply_text(
-        f"**THỐNG KÊ CHI TIÊU - THÁNG {target_month:02d}/{target_year}**\n"
-        f"────────────────────────\n"
-        f"• Tổng chi tiêu: `{total_expense:,.0f} VNĐ`\n"
-        f"• Tổng thu nhập: `{summary['total_income']:,.0f} VNĐ`\n"
-        f"• Số dư: `{summary['balance']:,.0f} VNĐ`\n"
-        f"• Số giao dịch: `{summary['transaction_count']}`",
-        parse_mode="Markdown"
+    chart_buf = chart_service.generate_expense_pie_chart(
+        summary.get("expense_by_category", {}),
+        target_month,
+        target_year
     )
+
+    if chart_buf:
+        await update.message.reply_photo(
+            photo=chart_buf,
+            caption=(
+                f"📊 **BIỂU ĐỒ CHI TIÊU - THÁNG {target_month:02d}/{target_year}**\n"
+                f"────────────────────────\n"
+                f"• Tổng chi tiêu: `{total_expense:,.0f} VNĐ`\n"
+                f"• Tổng thu nhập: `{summary['total_income']:,.0f} VNĐ`\n"
+                f"• Số dư: `{summary['balance']:,.0f} VNĐ`"
+            ),
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text(
+            f"**THỐNG KÊ CHI TIÊU - THÁNG {target_month:02d}/{target_year}**\n"
+            f"────────────────────────\n"
+            f"• Tổng chi tiêu: `{total_expense:,.0f} VNĐ`\n"
+            f"• Tổng thu nhập: `{summary['total_income']:,.0f} VNĐ`\n"
+            f"• Số dư: `{summary['balance']:,.0f} VNĐ`\n"
+            f"• Số giao dịch: `{summary['transaction_count']}`",
+            parse_mode="Markdown"
+        )
 
 async def expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Xử lý lệnh /chitieu: Ghi trực tiếp vào tab Sổ Chi Tiêu hoặc xem tổng quan."""
@@ -458,6 +480,7 @@ async def recent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user_access(update):
         return
 
+    await update.message.reply_chat_action("typing")
     user_id = update.effective_user.id
     recent = sheets_service.get_recent_transactions(user_id=user_id, limit=8)
 
@@ -482,6 +505,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user_access(update):
         return
 
+    await update.message.reply_chat_action("typing")
     user_id = update.effective_user.id
     now = datetime.now(config.TIMEZONE)
     today_str = now.strftime("%Y-%m-%d")
@@ -516,6 +540,7 @@ async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user_access(update):
         return
 
+    await update.message.reply_chat_action("typing")
     if not context.args or len(context.args) == 0:
         await update.message.reply_text(
             "Vui lòng cung cấp Mã GD cần xóa.\n"
@@ -569,6 +594,7 @@ async def link_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user_access(update):
         return
 
+    await update.message.reply_chat_action("typing")
     save_subscriber(update.effective_chat.id)
     url = sheets_service.get_sheet_url()
     if url:
