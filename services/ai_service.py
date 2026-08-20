@@ -1,5 +1,7 @@
 import json
 import io
+import base64
+import httpx
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from PIL import Image
@@ -98,98 +100,180 @@ class AIService:
         except Exception as e:
             print(f"Lỗi khởi tạo Gemini Client: {e}")
 
-    def analyze_text(self, text: str) -> Dict[str, Any]:
-        """Phân tích tin nhắn văn bản của người dùng."""
+    def _analyze_text_gemini(self, text: str, prompt: str) -> Dict[str, Any]:
+        """Phân tích văn bản bằng Model chính (Google Gemini)."""
         if not self.client:
             self._init_client()
             if not self.client:
-                return {
-                    "intent": "CHAT",
-                    "transactions": [],
-                    "debt_items": [],
-                    "reply_message": "Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm API Key vào file .env."
-                }
+                raise Exception("Chưa cấu hình GEMINI_API_KEY.")
 
+        response = self.client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(text=f"Phân tích tin nhắn sau:\n{text}")
+                    ]
+                )
+            ],
+            config=types.GenerateContentConfig(
+                system_instruction=prompt,
+                response_mime_type="application/json",
+                temperature=0.1
+            )
+        )
+        result_text = response.text.strip()
+        return json.loads(result_text)
+
+    def _analyze_text_fallback(self, text: str, prompt: str) -> Dict[str, Any]:
+        """Phân tích văn bản bằng Model dự phòng (OpenRouter / OpenAI-compatible)."""
+        if not config.FALLBACK_AI_API_KEY:
+            raise Exception("Chưa cấu hình FALLBACK_AI_API_KEY.")
+
+        url = f"{config.FALLBACK_AI_BASE_URL.rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {config.FALLBACK_AI_API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/SutieXuXi203/telegram_bot_wallet",
+            "X-Title": "Telegram Wallet Bot"
+        }
+        payload = {
+            "model": config.FALLBACK_AI_MODEL,
+            "messages": [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": f"Phân tích tin nhắn sau:\n{text}"}
+            ],
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"}
+        }
+
+        res = httpx.post(url, headers=headers, json=payload, timeout=30.0)
+        if res.status_code != 200:
+            raise Exception(f"Fallback Model trả về mã lỗi {res.status_code}: {res.text[:200]}")
+
+        content = res.json()["choices"][0]["message"]["content"]
+        return json.loads(content)
+
+    def analyze_text(self, text: str) -> Dict[str, Any]:
+        """Phân tích tin nhắn văn bản với cơ chế tự động chuyển sang Model dự phòng khi lỗi."""
         now_str = datetime.now(config.TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
         prompt = SYSTEM_PROMPT.format(current_time=now_str)
 
-        try:
-            response = self.client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[
-                    types.Content(
-                        role="user",
-                        parts=[
-                            types.Part.from_text(text=f"Phân tích tin nhắn sau:\n{text}")
-                        ]
-                    )
-                ],
-                config=types.GenerateContentConfig(
-                    system_instruction=prompt,
-                    response_mime_type="application/json",
-                    temperature=0.1
-                )
-            )
+        # 1. Thử gọi Model chính (Google Gemini)
+        if config.GEMINI_API_KEY:
+            try:
+                return self._analyze_text_gemini(text, prompt)
+            except Exception as e:
+                print(f"Model chính Gemini gặp sự cố ({e}). Đang chuyển sang Model dự phòng ({config.FALLBACK_AI_MODEL})...")
 
-            result_text = response.text.strip()
-            data = json.loads(result_text)
-            return data
-        except Exception as e:
-            print(f"Lỗi phân tích văn bản AI: {e}")
-            return {
-                "intent": "CHAT",
-                "transactions": [],
-                "debt_items": [],
-                "reply_message": f"Xin lỗi, đã xảy ra lỗi khi xử lý bằng AI: {str(e)}"
-            }
+        # 2. Chuyển sang Model dự phòng nếu Model chính lỗi hoặc chưa có key
+        if config.FALLBACK_AI_API_KEY:
+            try:
+                return self._analyze_text_fallback(text, prompt)
+            except Exception as e2:
+                print(f"Model dự phòng ({config.FALLBACK_AI_MODEL}) cũng gặp lỗi: {e2}")
 
-    def analyze_image(self, image_bytes: bytes, caption: Optional[str] = None) -> Dict[str, Any]:
-        """Phân tích ảnh chụp hóa đơn / biên lai."""
+        return {
+            "intent": "CHAT",
+            "transactions": [],
+            "debt_items": [],
+            "reply_message": "Xin lỗi, hiện tại không thể kết nối tới các dịch vụ AI để xử lý tin nhắn."
+        }
+
+    def _analyze_image_gemini(self, image_bytes: bytes, prompt_instruction: str, prompt: str) -> Dict[str, Any]:
+        """Quét ảnh bằng Model chính (Google Gemini)."""
         if not self.client:
             self._init_client()
             if not self.client:
-                return {
-                    "intent": "CHAT",
-                    "transactions": [],
-                    "debt_items": [],
-                    "reply_message": "Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm API Key vào file .env."
-                }
+                raise Exception("Chưa cấu hình GEMINI_API_KEY.")
 
+        response = self.client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(text=prompt_instruction),
+                        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+                    ]
+                )
+            ],
+            config=types.GenerateContentConfig(
+                system_instruction=prompt,
+                response_mime_type="application/json",
+                temperature=0.1
+            )
+        )
+        result_text = response.text.strip()
+        return json.loads(result_text)
+
+    def _analyze_image_fallback(self, image_bytes: bytes, prompt_instruction: str, prompt: str) -> Dict[str, Any]:
+        """Quét ảnh bằng Model dự phòng (OpenRouter GPT-4o Vision)."""
+        if not config.FALLBACK_AI_API_KEY:
+            raise Exception("Chưa cấu hình FALLBACK_AI_API_KEY.")
+
+        base64_img = base64.b64encode(image_bytes).decode('utf-8')
+        image_url = f"data:image/jpeg;base64,{base64_img}"
+
+        url = f"{config.FALLBACK_AI_BASE_URL.rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {config.FALLBACK_AI_API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/SutieXuXi203/telegram_bot_wallet",
+            "X-Title": "Telegram Wallet Bot"
+        }
+        payload = {
+            "model": config.FALLBACK_AI_MODEL,
+            "messages": [
+                {"role": "system", "content": prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_instruction},
+                        {"type": "image_url", "image_url": {"url": image_url}}
+                    ]
+                }
+            ],
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"}
+        }
+
+        res = httpx.post(url, headers=headers, json=payload, timeout=40.0)
+        if res.status_code != 200:
+            raise Exception(f"Fallback Model trả về mã lỗi {res.status_code}: {res.text[:200]}")
+
+        content = res.json()["choices"][0]["message"]["content"]
+        return json.loads(content)
+
+    def analyze_image(self, image_bytes: bytes, caption: Optional[str] = None) -> Dict[str, Any]:
+        """Phân tích ảnh chụp hóa đơn / biên lai với cơ chế tự động chuyển đổi sang Model dự phòng."""
         now_str = datetime.now(config.TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
         prompt = SYSTEM_PROMPT.format(current_time=now_str)
         prompt_instruction = "Đây là ảnh hóa đơn/biên lai. Hãy đọc hóa đơn và trích xuất các khoản chi tiêu."
         if caption:
             prompt_instruction += f"\nGhi chú kèm theo của người dùng: {caption}"
 
-        try:
-            response = self.client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[
-                    types.Content(
-                        role="user",
-                        parts=[
-                            types.Part.from_text(text=prompt_instruction),
-                            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-                        ]
-                    )
-                ],
-                config=types.GenerateContentConfig(
-                    system_instruction=prompt,
-                    response_mime_type="application/json",
-                    temperature=0.1
-                )
-            )
+        # 1. Thử gọi Model chính (Google Gemini)
+        if config.GEMINI_API_KEY:
+            try:
+                return self._analyze_image_gemini(image_bytes, prompt_instruction, prompt)
+            except Exception as e:
+                print(f"Model chính Gemini gặp sự cố đọc ảnh ({e}). Đang chuyển sang Model dự phòng ({config.FALLBACK_AI_MODEL})...")
 
-            result_text = response.text.strip()
-            data = json.loads(result_text)
-            return data
-        except Exception as e:
-            print(f"Lỗi phân tích ảnh AI: {e}")
-            return {
-                "intent": "CHAT",
-                "transactions": [],
-                "debt_items": [],
-                "reply_message": f"Không thể đọc thông tin từ ảnh: {str(e)}"
-            }
+        # 2. Chuyển sang Model dự phòng (GPT-4o Vision)
+        if config.FALLBACK_AI_API_KEY:
+            try:
+                return self._analyze_image_fallback(image_bytes, prompt_instruction, prompt)
+            except Exception as e2:
+                print(f"Model dự phòng ({config.FALLBACK_AI_MODEL}) đọc ảnh gặp lỗi: {e2}")
+
+        return {
+            "intent": "CHAT",
+            "transactions": [],
+            "debt_items": [],
+            "reply_message": "Không thể đọc thông tin từ ảnh do các dịch vụ AI tạm thời không khả dụng."
+        }
 
 ai_service = AIService()
+

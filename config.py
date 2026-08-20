@@ -21,6 +21,11 @@ GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON", "").strip()
 SPREADSHEET_ID_OR_NAME = os.getenv("SPREADSHEET_ID_OR_NAME", "Chi Tieu Ca Nhan").strip()
 TIMEZONE_STR = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh").strip()
 
+# Cấu hình Model AI dự phòng (Fallback)
+FALLBACK_AI_API_KEY = os.getenv("FALLBACK_AI_API_KEY", "").strip()
+FALLBACK_AI_BASE_URL = os.getenv("FALLBACK_AI_BASE_URL", "https://openrouter.ai/api/v1").strip()
+FALLBACK_AI_MODEL = os.getenv("FALLBACK_AI_MODEL", "openai/gpt-4o").strip()
+
 try:
     from zoneinfo import ZoneInfo
     TIMEZONE = ZoneInfo(TIMEZONE_STR)
