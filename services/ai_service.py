@@ -16,26 +16,33 @@ Nhiệm vụ của bạn là phân tích tin nhắn của người dùng (hoặc
 Thời gian hệ thống hiện tại: {current_time}
 
 QUY TẮC PHÂN LOẠI Ý ĐỊNH (INTENT):
-1. "intent": "ADD_DEBT" -> KHI NGƯỜI DÙNG GHI KHOẢN NỢ/VAY MỚI:
-   - Cho người khác mượn / vay: "Cho Nam vay 500k", "Nam mượn 200k", "Cho anh Hùng mượn 1 củ"
-   - Mình đi vay / mượn người khác: "Vay Tuấn 1 triệu", "Mượn mẹ 2 củ", "Vay bạn 500k"
+1. "intent": "PAY_DEBT" -> KHI NGƯỜI DÙNG BÁO TRẢ NỢ, HOÀN THÀNH TRẢ NỢ, ĐÃ TRẢ, THANH TOÁN NỢ HOẶC THU HỒI NỢ:
+   - Tất cả các câu có hành vi TRẢ TIỀN NỢ / THANH TOÁN NỢ:
+     + "Tuấn Anh trả 500k", "Tuấn Anh trả nợ 500k", "Tuấn Anh trả nợ nhé", "Tuấn Anh trả tiền", "Tuấn Anh đã trả"
+     + "Tuấn Anh trả xong nợ rồi", "Tuấn Anh hoàn thành trả nợ", "Tuấn Anh đã thanh toán"
+     + "Nam trả 200k", "Nam trả hết nợ rồi", "Đã thu nợ anh Hùng", "Tôi đã trả nợ Tuấn", "Trịnh Dũng đã trả"
+     + "Đã hoàn thành trả nợ", "Mã NO260820ABB2 đã trả", "Thanh toán nợ mã NO260820F66D"
+   - QUY TẮC BẮT BUỘC:
+     + Tuyệt đối để "debt_items": [] (mảng rỗng), KHÔNG ĐƯỢC sinh ra debt_items khi người dùng báo trả nợ!
+     + "debt_id": Mã giao dịch nếu có xuất hiện trong tin nhắn (ví dụ: "NO260820ABB2", "NO260820F66D", nếu không có thì null)
+     + "person": Tên người nợ / người trả liên quan (ví dụ: "Tuấn Anh", "Trịnh Dũng", "Nam", nếu không có thì null)
+     + "amount": Số tiền trả nếu có nói rõ (ví dụ: "Tuấn Anh trả 500k" -> 500000, "Nam trả 200k" -> 200000). Nếu trả hết hoặc không nói số tiền thì để null.
+     + "is_full_payment": true nếu là trả hết / hoàn thành trả nợ (hoặc không nói số tiền cụ thể), false nếu nói rõ chỉ trả 1 phần nợ nhỏ hơn.
+
+2. "intent": "ADD_DEBT" -> KHI GHI KHOẢN NỢ MỚI / CHO VAY MỚI / VAY MƯỢN MỚI:
+   - Chỉ dùng khi có từ: "vay", "mượn", "nợ", "cho vay", "cho mượn" (ví dụ: "Cho Nam vay 500k", "Nam mượn 200k", "Vay Tuấn 1 triệu", "Mượn mẹ 2 củ", "Trịnh Dũng nợ 122k")
+   - QUY TẮC BẮT BUỘC: TUYỆT ĐỐI KHÔNG dùng ADD_DEBT cho các câu có từ "trả", "thanh toán", "thu nợ", "hoàn thành"!
    => Khi là ADD_DEBT, trích xuất mảng "debt_items":
       - "person": Tên người vay / người cho vay (ví dụ: "Doãn Tuấn Anh", "Trịnh Dũng", "Nam", "Tuấn")
       - "debt_type": Một trong các loại: "Cho vay" | "Vay nợ"
       - "amount": Số tiền nguyên dương (VNĐ)
-      - "debt_date": Ngày nợ (Ví dụ: nếu tin nhắn có ghi "ngày 15/8", "hôm qua", "20/07/2026" thì chuyển đổi chuẩn thành dạng "DD/MM/YYYY" hoặc "YYYY-MM-DD"). QUY TẮC BẮT BUỘC: Nếu trong tin nhắn KHÔNG có thời gian ngày/tháng thì BẮT BUỘC ĐỂ TRỐNG "" (chuỗi rỗng), KHÔNG ĐƯỢC tự ý điền ngày hôm nay!
+      - "debt_date": Ngày nợ nếu có (ví dụ: "15/08/2026"). Nếu không có thì BẮT BUỘC ĐỂ TRỐNG "" (chuỗi rỗng)!
       - "status": "Nợ"
-      - "note": Ghi chú lý do nếu người dùng có nói rõ (vd: "tiền mua sách", "tiền liên hoan"). Nếu không có thì để trống "".
+      - "note": Ghi chú lý do nếu có nói rõ. Nếu không có thì để trống "".
       - "date": "{current_time}"
 
-2. "intent": "PAY_DEBT" -> KHI NGƯỜI DÙNG BÁO AI ĐÓ ĐÃ TRẢ NỢ HOẶC BẢN THÂN ĐÃ TRẢ NỢ XONG:
-   - "Tuấn Anh đã trả nợ nhé", "Nam trả hết nợ rồi", "Đã thu nợ anh Hùng", "Tôi đã trả nợ Tuấn", "Trịnh Dũng đã thanh toán"
-   => Trích xuất:
-      - "person": Tên người liên quan (ví dụ: "Tuấn Anh", "Doãn Tuấn Anh", "Nam", "Trịnh Dũng")
-      - "amount": Số tiền nếu có nói rõ (ví dụ: "Nam trả 500k" -> 500000), nếu không nói số tiền thì để null.
-
 3. "intent": "QUERY_DEBT" -> KHI NGƯỜI DÙNG HỎI VỀ DANH SÁCH NỢ:
-   - "Ai đang nợ tôi?", "Tôi đang nợ những ai?", "Xem sổ nợ", "Kiểm tra nợ"
+   - "Ai đang nợ tôi?", "Tôi đang nợ những ai?", "Xem sổ nợ", "Kiểm tra nợ", "Sổ ghi nợ"
 
 4. "intent": "ADD_TRANSACTION" -> KHI NGƯỜI DÙNG GHI NHẬN CHI TIÊU / THU NHẬP THÔNG THƯỜNG:
    - "Ăn phở 45k", "Đổ xăng 50k", "Mua áo 250k", "Lương về 15tr"
@@ -59,27 +66,12 @@ QUY ĐỔI TIỀN TỆ TIẾNG VIỆT:
 ĐỊNH DẠNG JSON TRẢ VỀ:
 {{
   "intent": "ADD_DEBT" | "PAY_DEBT" | "QUERY_DEBT" | "ADD_TRANSACTION" | "QUERY_STATS" | "CHAT",
-  "person": "Tuấn Anh",
+  "debt_id": null,
+  "person": null,
   "amount": null,
-  "debt_items": [
-    {{
-      "person": "Nam",
-      "debt_type": "Cho vay",
-      "amount": 500000,
-      "status": "Nợ",
-      "note": "Cho vay tiền",
-      "date": "{current_time}"
-    }}
-  ],
-  "transactions": [
-    {{
-      "amount": 45000,
-      "type": "Chi tiêu",
-      "category": "Ăn uống",
-      "note": "Ăn phở bò",
-      "date": "{current_time}"
-    }}
-  ],
+  "is_full_payment": true,
+  "debt_items": [],
+  "transactions": [],
   "query_info": {{
     "scope": "this_month",
     "category": null,

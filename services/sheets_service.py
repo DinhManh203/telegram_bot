@@ -476,8 +476,14 @@ class SheetsService:
 
         return results
 
-    def mark_debt_as_paid(self, person: str, amount: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Tìm khoản nợ của một người trong Sổ Ghi Nợ và đổi trạng thái sang 'Đã trả'."""
+    def mark_debt_as_paid(
+        self,
+        person: Optional[str] = None,
+        debt_id: Optional[str] = None,
+        amount: Optional[int] = None,
+        is_full: bool = True
+    ) -> List[Dict[str, Any]]:
+        """Tìm khoản nợ theo Mã GD hoặc tên người trong Sổ Ghi Nợ và cập nhật cột Số tiền, Trạng thái."""
         if not self.debt_worksheet:
             self._init_connection()
             if not self.debt_worksheet:
@@ -489,37 +495,80 @@ class SheetsService:
                 return []
 
             updated_items = []
-            person_clean = person.strip().lower()
+            person_clean = person.strip().lower() if person else ""
+            debt_id_clean = debt_id.strip().upper() if debt_id else ""
 
-            # all_vals[0] là header
-            # Cột A: Mã GD (index 0)
-            # Cột D: Người vay/ Chủ nợ (index 3)
-            # Cột E: Số tiền (index 4)
-            # Cột G: Ghi chú (index 6)
-            # Cột H: Trạng thái (index 7)
+            # all_vals[0] là header: ['Mã GD', 'Thời gian ghi', 'Thời gian nợ', 'Người vay/ Chủ nợ', 'Số tiền', 'Đơn vị', 'Ghi chú', 'Trạng thái']
+            # Cột A: Mã GD (index 0) - Col 1
+            # Cột D: Người vay/ Chủ nợ (index 3) - Col 4
+            # Cột E: Số tiền (index 4) - Col 5
+            # Cột G: Ghi chú (index 6) - Col 7
+            # Cột H: Trạng thái (index 7) - Col 8
             for row_idx, row in enumerate(all_vals[1:], start=2):
                 if len(row) < 8:
                     continue
-                r_person = row[3].strip().lower()
+                r_id = row[0].strip().upper()
+                r_person = row[3].strip()
+                r_person_lower = r_person.lower()
                 r_status = row[7].strip()
+                r_amount = parse_amount(row[4])
 
-                # So khớp tên người và trạng thái chưa trả
-                if (person_clean in r_person or r_person in person_clean) and r_status != "Đã trả":
-                    r_amount = parse_amount(row[4])
-                    if amount is not None and amount > 0 and r_amount != amount:
-                        continue
+                # Bỏ qua hàng tiêu đề tháng hợp nhất (vd: 'Tháng 8') hoặc hàng không có thông tin nợ
+                if not r_person or not r_id.startswith("NO"):
+                    continue
 
-                    self.debt_worksheet.update_cell(row_idx, 8, "Đã trả")
-                    updated_items.append({
-                        "id": row[0],
-                        "person": row[3],
-                        "amount": r_amount,
-                        "note": row[6] if len(row) > 6 else ""
-                    })
+                is_matched = False
+
+                # 1. Khớp theo Mã GD nếu có
+                if debt_id_clean and (debt_id_clean == r_id or debt_id_clean in r_id):
+                    is_matched = True
+                # 2. Khớp theo tên người nợ nếu chưa trả xong
+                elif person_clean and r_person_lower and (person_clean in r_person_lower or r_person_lower in person_clean):
+                    if r_status != "Đã trả":
+                        is_matched = True
+
+                if not is_matched:
+                    continue
+
+                # Xác định số tiền mới và trạng thái mới
+                if is_full or amount is None or amount <= 0 or amount >= r_amount:
+                    # Hoàn thành trả nợ (trả hết)
+                    paid_amount = r_amount if r_amount > 0 else (amount or 0)
+                    new_amount = 0
+                    new_status = "Đã trả"
+                else:
+                    # Trả một phần nợ
+                    paid_amount = amount
+                    new_amount = r_amount - amount
+                    new_status = "Nợ" if new_amount > 0 else "Đã trả"
+
+                # Cập nhật trực tiếp trên dòng Google Sheet: Cột E (Số tiền - col 5) và Cột H (Trạng thái - col 8)
+                self.debt_worksheet.update_cell(row_idx, 5, new_amount)
+                self.debt_worksheet.update_cell(row_idx, 8, new_status)
+
+                updated_items.append({
+                    "id": row[0],
+                    "person": r_person,
+                    "old_amount": r_amount,
+                    "paid_amount": paid_amount,
+                    "new_amount": new_amount,
+                    "status": new_status,
+                    "note": row[6] if len(row) > 6 else ""
+                })
+
+                # Nếu tìm theo Mã GD chính xác thì dừng sau khi cập nhật dòng đó
+                if debt_id_clean and debt_id_clean in r_id:
+                    break
+
+                # Nếu có số tiền cụ thể, khấu trừ dần qua các khoản nợ của người đó
+                if amount is not None and amount > 0:
+                    amount -= paid_amount
+                    if amount <= 0:
+                        break
 
             return updated_items
         except Exception as e:
-            print(f"Lỗi cập nhật trạng thái nợ của {person}: {e}")
+            print(f"Lỗi cập nhật trạng thái nợ (person={person}, debt_id={debt_id}): {e}")
             return []
 
     def get_debt_summary(self, user_id: Optional[int] = None) -> Dict[str, Any]:
@@ -591,7 +640,7 @@ class SheetsService:
                 note = str(rec.get("Ghi chú", rec.get("Ghi Chú", ""))).strip()
                 status = str(rec.get("Trạng thái", "Nợ")).strip()
 
-                if amount > 0:
+                if (amount > 0 or status == "Đã trả") and person:
                     if status != "Đã trả":
                         total_debt += amount
                     filtered_debts.append({
