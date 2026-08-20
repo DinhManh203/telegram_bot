@@ -252,17 +252,27 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # 3. HỎI ĐÁP VỀ SỔ NỢ
     elif intent == "QUERY_DEBT":
-        query_person = ai_result.get("person") or ""
+        query_person = (ai_result.get("person") or "").strip()
         if not query_person:
-            # Kiểm tra xem có tên người trong câu không
-            m_q = re.search(r"(?:nợ\s+của\s+|kiểm\s+tra\s+nợ\s+|nợ\s+)([A-Za-zÀ-ỹ\s]+)", text, re.IGNORECASE)
+            # Kiểm tra xem có tên người cụ thể trong câu không
+            m_q = re.search(r"(?:nợ\s+của\s+|kiểm\s+tra\s+nợ\s+)([A-Za-zÀ-ỹ\s]+)", text, re.IGNORECASE)
             if m_q:
                 query_person = re.sub(r"(?:vẫn|đang|bao nhiêu|không|nhé|ạ).*", "", m_q.group(1)).strip()
 
-        debt_summary = sheets_service.get_debt_summary(user_id=user_id)
-        items = debt_summary.get("items", [])
+        # Lọc bỏ các từ đại từ/tổng quát (không phải tên người)
+        invalid_person_words = [
+            "tôi", "toi", "tao", "mình", "minh", "ai", "những ai", "nhung ai", "người nào", "nguoi nao",
+            "ai đó", "ai do", "ai đang", "ai nợ", "tất cả", "tat ca", "danh sách", "danh sach",
+            "tháng này", "thang nay", "hôm nay", "hom nay", "sổ nợ", "so no", "toàn bộ", "toan bo",
+            "tổng hợp", "tong hop", "báo cáo", "bao cao", "trong tháng này", "trong thang nay",
+            "tôi trong tháng này", "toi trong thang nay"
+        ]
+        if query_person.lower() in invalid_person_words or any(w == query_person.lower() for w in invalid_person_words):
+            query_person = ""
 
         if query_person:
+            debt_summary = sheets_service.get_debt_summary(user_id=user_id)
+            items = debt_summary.get("items", [])
             person_clean = query_person.lower()
             matched = [it for it in items if person_clean in it["person"].lower() or it["person"].lower() in person_clean]
             if matched:
@@ -276,7 +286,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 for it in matched:
                     d_str = f" | Ngày: {it['debt_date']}" if it.get("debt_date") else ""
                     n_str = f" - {it['note']}" if it.get("note") else ""
-                    lines.append(f"- Mã `{it['id']}`: `{it['amount']:,.0f} VNĐ` [{it['status']}]{d_str}{n_str}")
+                    lines.append(f"• Mã GD: `{it['id']}` | `{it['amount']:,.0f} VNĐ` [{it['status']}]{d_str}{n_str}")
                 
                 sheet_url = sheets_service.get_sheet_url()
                 if sheet_url:

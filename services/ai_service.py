@@ -42,10 +42,11 @@ QUY TẮC PHÂN LOẠI Ý ĐỊNH (INTENT):
       - "date": "{current_time}"
 
 3. "intent": "QUERY_DEBT" -> KHI HỎI VỀ SỔ NỢ HOẶC XÁC NHẬN TÌNH TRẠNG NỢ HIỆN TẠI:
-   - "Ai đang nợ tôi?", "Tôi đang nợ những ai?", "Xem sổ nợ", "Kiểm tra nợ", "Sổ ghi nợ"
+   - "Có những ai đang nợ tôi?", "Ai đang nợ tôi trong tháng này?", "Tôi đang nợ những ai?", "Xem sổ nợ", "Kiểm tra nợ", "Sổ ghi nợ", "Danh sách nợ"
    - "Tuấn Anh vẫn đang nợ 500k nhé", "Tuấn Anh còn nợ bao nhiêu?", "Trịnh Dũng còn nợ không?", "Kiểm tra nợ Tuấn Anh"
    => Trích xuất:
-      - "person": Tên người cần tra cứu nợ nếu có (ví dụ: "Tuấn Anh", "Trịnh Dũng", nếu hỏi chung thì null)
+      - "person": Tên riêng cụ thể của người cần tra cứu (ví dụ: "Tuấn Anh", "Trịnh Dũng"). 
+      - LƯU Ý QUAN TRỌNG: Tuyệt đối KHÔNG lấy "tôi", "ai", "những ai", "người nào" làm person. Nếu là câu hỏi chung ("ai nợ tôi", "có những ai đang nợ...") thì BẮT BUỘC để "person": null!
 
 4. "intent": "DELETE" -> KHI NGƯỜI DÙNG YÊU CẦU XÓA GIAO DỊCH / XÓA KHOẢN NỢ THEO MÃ GD:
    - "xóa mã NO260820F66D", "xóa 2 NO260820F66D NO260820ABB2 này", "xóa giao dịch TX2608201234", "hủy mã NO...", "xóa NO260820F66D"
