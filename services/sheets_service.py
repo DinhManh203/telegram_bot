@@ -344,6 +344,40 @@ class SheetsService:
             return self.spreadsheet.url
         return None
 
+    def _ensure_month_header(self, ws: gspread.Worksheet, month: int, is_debt: bool = False):
+        """Nếu chưa có hàng tiêu đề tháng (ví dụ 'Tháng 8'), chèn hàng hợp nhất nền xám chữ đen đậm."""
+        month_label = f"Tháng {month}"
+        try:
+            all_vals = ws.get_all_values()
+            # Kiểm tra xem tiêu đề tháng này đã xuất hiện trong bảng chưa
+            for r in all_vals:
+                if r and r[0].strip().lower() == month_label.lower():
+                    return
+
+            end_col = "H" if is_debt else "F"
+            new_row_idx = len(all_vals) + 1
+
+            # Thêm hàng mới
+            ws.append_row([month_label], value_input_option="USER_ENTERED")
+
+            # Hợp nhất các ô trên hàng đó (A:F hoặc A:H)
+            ws.merge_cells(f"A{new_row_idx}:{end_col}{new_row_idx}", merge_type="MERGE_ALL")
+
+            # Định dạng: nền xám #D9D9D9, chữ đen đậm, Times New Roman, căn giữa
+            ws.format(f"A{new_row_idx}:{end_col}{new_row_idx}", {
+                "backgroundColor": {"red": 0.85, "green": 0.85, "blue": 0.85},
+                "horizontalAlignment": "CENTER",
+                "verticalAlignment": "MIDDLE",
+                "textFormat": {
+                    "foregroundColor": {"red": 0.0, "green": 0.0, "blue": 0.0},
+                    "fontSize": 11,
+                    "bold": True,
+                    "fontFamily": "Times New Roman"
+                }
+            })
+        except Exception as e:
+            print(f"Lỗi chèn tiêu đề tháng '{month_label}': {e}")
+
     def add_transactions(self, items: List[Dict[str, Any]], user_id: int, user_name: str) -> List[Dict[str, Any]]:
         """Thêm giao dịch vào tab 'Sổ Chi Tiêu' (6 cột)."""
         if not self.worksheet:
@@ -352,6 +386,9 @@ class SheetsService:
                 raise Exception("Không thể kết nối đến Google Sheets.")
 
         now = datetime.now(config.TIMEZONE)
+        # Đảm bảo có dòng tiêu đề tháng trước khi chèn giao dịch đầu tiên
+        self._ensure_month_header(self.worksheet, month=now.month, is_debt=False)
+
         results = []
         rows_to_append = []
 
@@ -394,6 +431,9 @@ class SheetsService:
                 raise Exception("Không thể mở tab 'Sổ Ghi Nợ' trên Google Sheets.")
 
         now = datetime.now(config.TIMEZONE)
+        # Đảm bảo có dòng tiêu đề tháng trước khi chèn giao dịch nợ đầu tiên
+        self._ensure_month_header(self.debt_worksheet, month=now.month, is_debt=True)
+
         results = []
         rows_to_append = []
 
@@ -433,7 +473,6 @@ class SheetsService:
 
         if rows_to_append:
             self.debt_worksheet.append_rows(rows_to_append, value_input_option="USER_ENTERED")
-            self._format_worksheet(self.debt_worksheet, is_debt=True)
 
         return results
 
@@ -606,14 +645,15 @@ class SheetsService:
                 return []
 
         records = self.worksheet.get_all_records(numericise_ignore=['all'])
+        valid_records = [r for r in records if str(r.get("Mã GD", "")).startswith("TX")]
         if user_id:
-            records = [r for r in records if str(r.get("User ID", "")).strip() == str(user_id)]
+            valid_records = [r for r in valid_records if str(r.get("User ID", "")).strip() == str(user_id)]
 
-        records = records[-limit:]
-        records.reverse()
+        valid_records = valid_records[-limit:]
+        valid_records.reverse()
 
         result = []
-        for rec in records:
+        for rec in valid_records:
             amount = parse_amount(rec.get("Số tiền", rec.get("Số Tiền (VNĐ)", 0)))
             result.append({
                 "id": rec.get("Mã GD", ""),
