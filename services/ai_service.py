@@ -90,13 +90,13 @@ class AIService:
     def _init_client(self):
         """Khởi tạo Gemini Client."""
         if not config.GEMINI_API_KEY:
-            print("⚠️ Cảnh báo: GEMINI_API_KEY chưa được thiết lập.")
+            print("Canh bao: GEMINI_API_KEY chua duoc thiet lap.")
             return
 
         try:
             self.client = genai.Client(api_key=config.GEMINI_API_KEY)
         except Exception as e:
-            print(f"❌ Lỗi khởi tạo Gemini Client: {e}")
+            print(f"Loi khoi tao Gemini Client: {e}")
 
     def analyze_text(self, text: str) -> Dict[str, Any]:
         """Phân tích tin nhắn văn bản của người dùng."""
@@ -107,7 +107,7 @@ class AIService:
                     "intent": "CHAT",
                     "transactions": [],
                     "debt_items": [],
-                    "reply_message": "⚠️ Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm API Key vào file .env."
+                    "reply_message": "Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm API Key vào file .env."
                 }
 
         now_str = datetime.now(config.TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
@@ -135,7 +135,7 @@ class AIService:
             data = json.loads(result_text)
             return data
         except Exception as e:
-            print(f"❌ Lỗi phân tích văn bản AI: {e}")
+            print(f"Loi phan tich van ban AI: {e}")
             return {
                 "intent": "CHAT",
                 "transactions": [],
@@ -152,7 +152,7 @@ class AIService:
                     "intent": "CHAT",
                     "transactions": [],
                     "debt_items": [],
-                    "reply_message": "⚠️ Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm API Key vào file .env."
+                    "reply_message": "Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm API Key vào file .env."
                 }
 
         now_str = datetime.now(config.TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
@@ -184,7 +184,7 @@ class AIService:
             data = json.loads(result_text)
             return data
         except Exception as e:
-            print(f"❌ Lỗi phân tích ảnh AI: {e}")
+            print(f"Loi phan tich anh AI: {e}")
             return {
                 "intent": "CHAT",
                 "transactions": [],

@@ -67,7 +67,7 @@ class SheetsService:
                 info = json.loads(config.GOOGLE_CREDENTIALS_JSON)
                 creds = Credentials.from_service_account_info(info, scopes=SCOPES)
             except Exception as e:
-                print(f"❌ Lỗi đọc GOOGLE_CREDENTIALS_JSON từ biến môi trường: {e}")
+                print(f"Loi doc GOOGLE_CREDENTIALS_JSON tu bien moi truong: {e}")
 
         if not creds and os.path.exists(config.GOOGLE_CREDENTIALS_FILE):
             try:
@@ -76,10 +76,10 @@ class SheetsService:
                     scopes=SCOPES
                 )
             except Exception as e:
-                print(f"❌ Lỗi đọc Google credentials file: {e}")
+                print(f"Loi doc Google credentials file: {e}")
 
         if not creds:
-            print("⚠️ Cảnh báo: Chưa cấu hình Google Service Account (file credentials hoặc biến GOOGLE_CREDENTIALS_JSON).")
+            print("Canh bao: Chua cau hinh Google Service Account (file credentials hoac bien GOOGLE_CREDENTIALS_JSON).")
             return
 
         try:
@@ -87,7 +87,7 @@ class SheetsService:
             self._get_or_create_sheet()
             self._get_or_create_debt_sheet()
         except Exception as e:
-            print(f"❌ Lỗi kết nối Google Sheets: {e}")
+            print(f"Loi ket noi Google Sheets: {e}")
 
     def _get_or_create_sheet(self):
         """Tìm hoặc mở bảng tính, khởi tạo tiêu đề tab Sổ Chi Tiêu nếu chưa có."""
@@ -106,10 +106,10 @@ class SheetsService:
             try:
                 self.spreadsheet = self.client.create(sheet_target)
             except Exception as e:
-                print(f"❌ Không thể tạo mới bảng tính: {e}")
+                print(f"Khong the tao moi bang tinh: {e}")
                 return
         except Exception as e:
-            print(f"❌ Lỗi mở bảng tính: {e}")
+            print(f"Loi mo bang tinh: {e}")
             return
 
         # Lấy hoặc tạo sheet Chi Tiêu
@@ -128,7 +128,7 @@ class SheetsService:
 
             self._format_worksheet(self.worksheet, is_debt=False)
         except Exception as e:
-            print(f"❌ Lỗi khởi tạo Worksheet Chi Tiêu: {e}")
+            print(f"Loi khoi tao Worksheet Chi Tieu: {e}")
 
     def _get_or_create_debt_sheet(self):
         """Tìm hoặc tạo tab riêng 'Sổ Ghi Nợ' trong Google Sheet."""
@@ -139,7 +139,7 @@ class SheetsService:
             try:
                 self.debt_worksheet = self.spreadsheet.worksheet("Sổ Ghi Nợ")
             except gspread.exceptions.WorksheetNotFound:
-                print("Tạo tab mới 'Sổ Ghi Nợ'...")
+                print("Tao tab moi 'So Ghi No'...")
                 self.debt_worksheet = self.spreadsheet.add_worksheet(title="Sổ Ghi Nợ", rows=100, cols=10)
 
             existing_values = self.debt_worksheet.row_values(1)
@@ -151,7 +151,7 @@ class SheetsService:
 
             self._format_worksheet(self.debt_worksheet, is_debt=True)
         except Exception as e:
-            print(f"❌ Lỗi khởi tạo Worksheet Ghi Nợ: {e}")
+            print(f"Loi khoi tao Worksheet Ghi No: {e}")
 
     def _setup_debt_conditional_formatting(self):
         """Thiết lập Dropdown List và Định dạng màu có điều kiện cho cột Trạng thái (Cột H)."""
@@ -245,7 +245,7 @@ class SheetsService:
             }
             self.spreadsheet.batch_update(body)
         except Exception as e:
-            print(f"⚠️ Lỗi cấu hình conditional formatting / validation: {e}")
+            print(f"Loi cau hinh conditional formatting / validation: {e}")
 
     def _format_worksheet(self, ws: gspread.Worksheet, is_debt: bool = False):
         """Áp dụng quy tắc định dạng Times New Roman, nền đen chữ trắng và căn lề."""
@@ -336,7 +336,7 @@ class SheetsService:
 
             ws.freeze(rows=1)
         except Exception as err:
-            print(f"⚠️ Lỗi định dạng bảng: {err}")
+            print(f"Loi dinh dang bang: {err}")
 
     def get_sheet_url(self) -> Optional[str]:
         """Lấy URL của Google Sheet để gửi cho người dùng."""
