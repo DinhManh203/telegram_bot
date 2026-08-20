@@ -45,8 +45,17 @@ def main():
 
     print("Đang khởi động Telegram AI Expense Bot...")
     
+    # Cấu hình HTTPXRequest với timeout lớn hơn và cơ chế retry khi chạy trên server
+    from telegram.request import HTTPXRequest
+    request_client = HTTPXRequest(
+        connect_timeout=30.0,
+        read_timeout=30.0,
+        write_timeout=30.0,
+        pool_timeout=30.0
+    )
+
     # Khởi tạo Application
-    app = ApplicationBuilder().token(config.TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(config.TELEGRAM_BOT_TOKEN).request(request_client).build()
 
     # Đăng ký các lệnh Command
     app.add_handler(CommandHandler("start", start_command))
@@ -88,8 +97,8 @@ def main():
         print("Đã thiết lập lịch gửi báo cáo tự động lúc 21:00 hàng ngày.")
 
     print("Bot đã sẵn sàng nhận tin nhắn trên Telegram.")
-    # Bắt đầu chạy bot
-    app.run_polling()
+    # Bắt đầu chạy bot với cơ chế tự động thử lại (bootstrap_retries=10)
+    app.run_polling(bootstrap_retries=10, timeout=30, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
