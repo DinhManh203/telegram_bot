@@ -125,8 +125,7 @@ class SheetsService:
                     self.worksheet.update_title("Sổ Chi Tiêu")
                 except Exception:
                     pass
-
-            self._format_worksheet(self.worksheet, is_debt=False)
+                self._format_worksheet(self.worksheet, is_debt=False)
         except Exception as e:
             print(f"Lỗi khởi tạo Worksheet Chi Tiêu: {e}")
 
@@ -148,8 +147,7 @@ class SheetsService:
                     self.debt_worksheet.insert_row(HEADERS_DEBT, index=1)
                 else:
                     self.debt_worksheet.update(values=[HEADERS_DEBT], range_name="A1:H1")
-
-            self._format_worksheet(self.debt_worksheet, is_debt=True)
+                self._format_worksheet(self.debt_worksheet, is_debt=True)
         except Exception as e:
             print(f"Lỗi khởi tạo Worksheet Ghi Nợ: {e}")
 
@@ -248,92 +246,212 @@ class SheetsService:
             print(f"Lỗi cấu hình định dạng có điều kiện / danh sách lựa chọn: {e}")
 
     def _format_worksheet(self, ws: gspread.Worksheet, is_debt: bool = False):
-        """Áp dụng quy tắc định dạng Times New Roman, nền đen chữ trắng và căn lề."""
+        """Áp dụng toàn bộ quy tắc định dạng (nền đen header, nền xám chữ đậm cho tiêu đề Tháng/Ngày, nền trắng cho dữ liệu) trong 1 request batch_update duy nhất."""
         try:
+            if not self.spreadsheet or not ws:
+                return
+
+            sheet_id = ws.id
+            num_cols = 8 if is_debt else 6
+
+            requests = [
+                # 1. Format Header cột hàng 1 (Nền đen #1F1F1F, chữ trắng in đậm, Times New Roman, căn giữa)
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 0,
+                            "endRowIndex": 1,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": num_cols
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": {"red": 0.12, "green": 0.12, "blue": 0.12},
+                                "horizontalAlignment": "CENTER",
+                                "verticalAlignment": "MIDDLE",
+                                "textFormat": {
+                                    "foregroundColor": {"red": 1.0, "green": 1.0, "blue": 1.0},
+                                    "fontSize": 11,
+                                    "bold": True,
+                                    "fontFamily": "Times New Roman"
+                                }
+                            }
+                        },
+                        "fields": "userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)"
+                    }
+                },
+                # 2. Reset toàn bộ vùng dữ liệu từ hàng 2 sang nền trắng, chữ thường
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": 1000,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": num_cols
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": {"red": 1.0, "green": 1.0, "blue": 1.0},
+                                "horizontalAlignment": "CENTER",
+                                "verticalAlignment": "MIDDLE",
+                                "textFormat": {
+                                    "foregroundColor": {"red": 0.0, "green": 0.0, "blue": 0.0},
+                                    "bold": False,
+                                    "fontFamily": "Times New Roman"
+                                }
+                            }
+                        },
+                        "fields": "userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)"
+                    }
+                }
+            ]
+
+            # Căn lề và numberFormat riêng cho các cột
             if not is_debt:
-                # 1. Format Header Sổ Chi Tiêu (A1:F1 - 6 cột)
-                ws.format("A1:F1", {
-                    "backgroundColor": {"red": 0.12, "green": 0.12, "blue": 0.12},
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
-                    "textFormat": {
-                        "foregroundColor": {"red": 1.0, "green": 1.0, "blue": 1.0},
-                        "fontSize": 11,
-                        "bold": True,
-                        "fontFamily": "Times New Roman"
+                # Cột D: Số tiền (căn giữa, numberFormat)
+                requests.append({
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": 1000,
+                            "startColumnIndex": 3,
+                            "endColumnIndex": 4
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "horizontalAlignment": "CENTER",
+                                "numberFormat": {"type": "NUMBER", "pattern": "#,##0"}
+                            }
+                        },
+                        "fields": "userEnteredFormat(horizontalAlignment,numberFormat)"
                     }
                 })
-                # 2. Format dữ liệu Sổ Chi Tiêu (A2:C Center, D Center + numberFormat, E Center - Đơn vị, F Left - Mô Tả)
-                ws.format("A2:C", {
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
-                    "textFormat": {"fontFamily": "Times New Roman"}
-                })
-                ws.format("D2:D", {
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
-                    "numberFormat": {
-                        "type": "NUMBER",
-                        "pattern": "#,##0"
-                    },
-                    "textFormat": {"fontFamily": "Times New Roman"}
-                })
-                ws.format("E2:E", {
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
-                    "textFormat": {"fontFamily": "Times New Roman"}
-                })
-                ws.format("F2:F", {
-                    "horizontalAlignment": "LEFT",
-                    "verticalAlignment": "MIDDLE",
-                    "textFormat": {"fontFamily": "Times New Roman"}
+                # Cột F: Mô Tả (căn trái)
+                requests.append({
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": 1000,
+                            "startColumnIndex": 5,
+                            "endColumnIndex": 6
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "horizontalAlignment": "LEFT"
+                            }
+                        },
+                        "fields": "userEnteredFormat(horizontalAlignment)"
+                    }
                 })
             else:
-                # 1. Format Header Sổ Ghi Nợ (A1:H1 - 8 cột)
-                ws.format("A1:H1", {
-                    "backgroundColor": {"red": 0.12, "green": 0.12, "blue": 0.12},
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
-                    "textFormat": {
-                        "foregroundColor": {"red": 1.0, "green": 1.0, "blue": 1.0},
-                        "fontSize": 11,
-                        "bold": True,
-                        "fontFamily": "Times New Roman"
+                # Cột E: Số tiền (căn giữa, numberFormat)
+                requests.append({
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": 1000,
+                            "startColumnIndex": 4,
+                            "endColumnIndex": 5
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "horizontalAlignment": "CENTER",
+                                "numberFormat": {"type": "NUMBER", "pattern": "#,##0"}
+                            }
+                        },
+                        "fields": "userEnteredFormat(horizontalAlignment,numberFormat)"
                     }
                 })
-                # 2. Format dữ liệu Sổ Ghi Nợ (A2:D Center, E Center + numberFormat, F Center - Đơn vị, G Left - Ghi chú, H Center - Trạng thái)
-                ws.format("A2:D", {
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
-                    "textFormat": {"fontFamily": "Times New Roman"}
+                # Cột G: Ghi chú (căn trái)
+                requests.append({
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": 1000,
+                            "startColumnIndex": 6,
+                            "endColumnIndex": 7
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "horizontalAlignment": "LEFT"
+                            }
+                        },
+                        "fields": "userEnteredFormat(horizontalAlignment)"
+                    }
                 })
-                ws.format("E2:E", {
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
-                    "numberFormat": {
-                        "type": "NUMBER",
-                        "pattern": "#,##0"
-                    },
-                    "textFormat": {"fontFamily": "Times New Roman"}
+                # Cột H: Trạng thái (in đậm)
+                requests.append({
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": 1000,
+                            "startColumnIndex": 7,
+                            "endColumnIndex": 8
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "textFormat": {"bold": True, "fontFamily": "Times New Roman"}
+                            }
+                        },
+                        "fields": "userEnteredFormat(textFormat)"
+                    }
                 })
-                ws.format("F2:F", {
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
-                    "textFormat": {"fontFamily": "Times New Roman"}
-                })
-                ws.format("G2:G", {
-                    "horizontalAlignment": "LEFT",
-                    "verticalAlignment": "MIDDLE",
-                    "textFormat": {"fontFamily": "Times New Roman"}
-                })
-                ws.format("H2:H", {
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
-                    "textFormat": {"fontFamily": "Times New Roman", "bold": True}
-                })
-                # Áp dụng Dropdown và màu sắc có điều kiện
-                self._setup_debt_conditional_formatting()
 
+            # 3. Quét tất cả các hàng để tìm và áp dụng định dạng Nền Xám + Chữ Đậm cho các tiêu đề Tháng / Ngày
+            all_vals = ws.get_all_values()
+            for row_idx, r in enumerate(all_vals[1:], start=2):
+                if not r or not r[0]:
+                    continue
+                first_cell = r[0].strip().lower()
+                if first_cell.startswith("tháng ") or first_cell.startswith("ngày "):
+                    requests.append({
+                        "mergeCells": {
+                            "range": {
+                                "sheetId": sheet_id,
+                                "startRowIndex": row_idx - 1,
+                                "endRowIndex": row_idx,
+                                "startColumnIndex": 0,
+                                "endColumnIndex": num_cols
+                            },
+                            "mergeType": "MERGE_ALL"
+                        }
+                    })
+                    requests.append({
+                        "repeatCell": {
+                            "range": {
+                                "sheetId": sheet_id,
+                                "startRowIndex": row_idx - 1,
+                                "endRowIndex": row_idx,
+                                "startColumnIndex": 0,
+                                "endColumnIndex": num_cols
+                            },
+                            "cell": {
+                                "userEnteredFormat": {
+                                    "backgroundColor": {"red": 0.85, "green": 0.85, "blue": 0.85},
+                                    "horizontalAlignment": "CENTER",
+                                    "verticalAlignment": "MIDDLE",
+                                    "textFormat": {
+                                        "foregroundColor": {"red": 0.0, "green": 0.0, "blue": 0.0},
+                                        "fontSize": 11,
+                                        "bold": True,
+                                        "fontFamily": "Times New Roman"
+                                    }
+                                }
+                            },
+                            "fields": "userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)"
+                        }
+                    })
+
+            self.spreadsheet.batch_update({"requests": requests})
+            if is_debt:
+                self._setup_debt_conditional_formatting()
             ws.freeze(rows=1)
         except Exception as err:
             print(f"Lỗi định dạng bảng tính: {err}")
@@ -343,6 +461,54 @@ class SheetsService:
         if self.spreadsheet:
             return self.spreadsheet.url
         return None
+
+    def _format_header_row(self, ws: gspread.Worksheet, row_idx: int, end_col: str):
+        """Format một hàng tiêu đề hợp nhất nền xám chữ đen đậm trong 1 request batch_update duy nhất."""
+        try:
+            num_cols = 8 if end_col == "H" else 6
+            requests = [
+                {
+                    "mergeCells": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "startRowIndex": row_idx - 1,
+                            "endRowIndex": row_idx,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": num_cols
+                        },
+                        "mergeType": "MERGE_ALL"
+                    }
+                },
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "startRowIndex": row_idx - 1,
+                            "endRowIndex": row_idx,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": num_cols
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": {"red": 0.85, "green": 0.85, "blue": 0.85},
+                                "horizontalAlignment": "CENTER",
+                                "verticalAlignment": "MIDDLE",
+                                "textFormat": {
+                                    "foregroundColor": {"red": 0.0, "green": 0.0, "blue": 0.0},
+                                    "fontSize": 11,
+                                    "bold": True,
+                                    "fontFamily": "Times New Roman"
+                                }
+                            }
+                        },
+                        "fields": "userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)"
+                    }
+                }
+            ]
+            if self.spreadsheet:
+                self.spreadsheet.batch_update({"requests": requests})
+        except Exception as e:
+            print(f"Lỗi format header row {row_idx}: {e}")
 
     def _ensure_month_header(self, ws: gspread.Worksheet, month: int, is_debt: bool = False):
         """Nếu chưa có hàng tiêu đề tháng (ví dụ 'Tháng 8'), chèn hàng hợp nhất nền xám chữ đen đậm."""
@@ -355,28 +521,54 @@ class SheetsService:
                     return
 
             end_col = "H" if is_debt else "F"
-            new_row_idx = len(all_vals) + 1
+            res = ws.append_row([month_label], value_input_option="USER_ENTERED")
+            
+            row_idx = None
+            if isinstance(res, dict):
+                updated_range = res.get('updates', {}).get('updatedRange', '')
+                import re
+                m = re.search(r"[A-Za-z]+(\d+)", updated_range.split("!")[-1])
+                if m:
+                    row_idx = int(m.group(1))
+            if not row_idx:
+                row_idx = len(ws.get_all_values())
 
-            # Thêm hàng mới
-            ws.append_row([month_label], value_input_option="USER_ENTERED")
-
-            # Hợp nhất các ô trên hàng đó (A:F hoặc A:H)
-            ws.merge_cells(f"A{new_row_idx}:{end_col}{new_row_idx}", merge_type="MERGE_ALL")
-
-            # Định dạng: nền xám #D9D9D9, chữ đen đậm, Times New Roman, căn giữa
-            ws.format(f"A{new_row_idx}:{end_col}{new_row_idx}", {
-                "backgroundColor": {"red": 0.85, "green": 0.85, "blue": 0.85},
-                "horizontalAlignment": "CENTER",
-                "verticalAlignment": "MIDDLE",
-                "textFormat": {
-                    "foregroundColor": {"red": 0.0, "green": 0.0, "blue": 0.0},
-                    "fontSize": 11,
-                    "bold": True,
-                    "fontFamily": "Times New Roman"
-                }
-            })
+            self._format_header_row(ws, row_idx, end_col)
         except Exception as e:
             print(f"Lỗi chèn tiêu đề tháng '{month_label}': {e}")
+
+    def _ensure_day_header(self, ws: gspread.Worksheet, day: int, month: int, is_debt: bool = False):
+        """Đảm bảo có hàng tiêu đề tháng trước, sau đó chèn hàng tiêu đề ngày (ví dụ 'Ngày 25 tháng 8')."""
+        self._ensure_month_header(ws, month=month, is_debt=is_debt)
+
+        day_label = f"Ngày {day} tháng {month}"
+        try:
+            all_vals = ws.get_all_values()
+            # Kiểm tra xem tiêu đề ngày này đã xuất hiện trong bảng chưa
+            for r in all_vals:
+                if r and (
+                    r[0].strip().lower() == day_label.lower() or
+                    r[0].strip().lower() == f"ngày {day}/{month}" or
+                    r[0].strip().lower() == f"ngày {day:02d}/{month:02d}"
+                ):
+                    return
+
+            end_col = "H" if is_debt else "F"
+            res = ws.append_row([day_label], value_input_option="USER_ENTERED")
+            
+            row_idx = None
+            if isinstance(res, dict):
+                updated_range = res.get('updates', {}).get('updatedRange', '')
+                import re
+                m = re.search(r"[A-Za-z]+(\d+)", updated_range.split("!")[-1])
+                if m:
+                    row_idx = int(m.group(1))
+            if not row_idx:
+                row_idx = len(ws.get_all_values())
+
+            self._format_header_row(ws, row_idx, end_col)
+        except Exception as e:
+            print(f"Lỗi chèn tiêu đề ngày '{day_label}': {e}")
 
     def add_transactions(self, items: List[Dict[str, Any]], user_id: int, user_name: str) -> List[Dict[str, Any]]:
         """Thêm giao dịch vào tab 'Sổ Chi Tiêu' (6 cột)."""
@@ -386,11 +578,8 @@ class SheetsService:
                 raise Exception("Không thể kết nối đến Google Sheets.")
 
         now = datetime.now(config.TIMEZONE)
-        # Đảm bảo có dòng tiêu đề tháng trước khi chèn giao dịch đầu tiên
-        self._ensure_month_header(self.worksheet, month=now.month, is_debt=False)
-
         results = []
-        rows_to_append = []
+        grouped_by_date: Dict[tuple, list] = {}
 
         for item in items:
             tx_id = "TX" + now.strftime("%y%m%d") + uuid.uuid4().hex[:4].upper()
@@ -400,6 +589,20 @@ class SheetsService:
             unit = "VNĐ"
             note = item.get("note", "")
 
+            # Trích xuất ngày & tháng của giao dịch
+            parsed_dt = now
+            if item.get("date"):
+                for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+                    try:
+                        parsed_dt = datetime.strptime(str(item["date"]).strip()[:19], fmt)
+                        break
+                    except ValueError:
+                        pass
+
+            date_key = (parsed_dt.day, parsed_dt.month)
+            if date_key not in grouped_by_date:
+                grouped_by_date[date_key] = []
+
             row = [
                 tx_id,
                 tx_time,
@@ -408,7 +611,7 @@ class SheetsService:
                 unit,
                 note
             ]
-            rows_to_append.append(row)
+            grouped_by_date[date_key].append(row)
             results.append({
                 "id": tx_id,
                 "time": tx_time,
@@ -418,8 +621,10 @@ class SheetsService:
                 "note": note
             })
 
-        if rows_to_append:
-            self.worksheet.append_rows(rows_to_append, value_input_option="USER_ENTERED")
+        for (day, month), rows in grouped_by_date.items():
+            self._ensure_day_header(self.worksheet, day=day, month=month, is_debt=False)
+            if rows:
+                self.worksheet.append_rows(rows, value_input_option="USER_ENTERED")
 
         return results
 
@@ -431,8 +636,8 @@ class SheetsService:
                 raise Exception("Không thể mở tab 'Sổ Ghi Nợ' trên Google Sheets.")
 
         now = datetime.now(config.TIMEZONE)
-        # Đảm bảo có dòng tiêu đề tháng trước khi chèn giao dịch nợ đầu tiên
-        self._ensure_month_header(self.debt_worksheet, month=now.month, is_debt=True)
+        # Đảm bảo có dòng tiêu đề ngày trước khi chèn giao dịch nợ
+        self._ensure_day_header(self.debt_worksheet, day=now.day, month=now.month, is_debt=True)
 
         results = []
         rows_to_append = []
@@ -814,6 +1019,97 @@ class SheetsService:
             pass
 
         return False
+
+    def reorganize_sheets_with_day_headers(self) -> bool:
+        """Tổ chức lại toàn bộ dữ liệu hiện có trong Sổ Chi Tiêu và Sổ Ghi Nợ theo dải phân cách từng Ngày và Tháng."""
+        if not self.spreadsheet:
+            self._init_connection()
+            if not self.spreadsheet:
+                return False
+
+        # 1. Tổ chức lại Sổ Chi Tiêu
+        if self.worksheet:
+            try:
+                all_vals = self.worksheet.get_all_values()
+                valid_rows = []
+                for r in all_vals[1:]:
+                    if r and len(r) >= 6 and r[0].startswith("TX"):
+                        valid_rows.append(r[:6])
+
+                # Gom nhóm theo ngày
+                groups: Dict[tuple, list] = {}
+                for r in valid_rows:
+                    time_str = r[1]
+                    parsed_dt = None
+                    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+                        try:
+                            parsed_dt = datetime.strptime(time_str[:19], fmt)
+                            break
+                        except ValueError:
+                            pass
+                    if not parsed_dt:
+                        parsed_dt = datetime.now(config.TIMEZONE)
+
+                    key = (parsed_dt.year, parsed_dt.month, parsed_dt.day)
+                    if key not in groups:
+                        groups[key] = []
+                    groups[key].append(r)
+
+                # Xóa toàn bộ nội dung cũ và ghi lại có dải phân cách ngày
+                self.worksheet.clear()
+                self.worksheet.update(values=[HEADERS], range_name="A1:F1")
+                self._format_worksheet(self.worksheet, is_debt=False)
+
+                for (yr, m, d), rows in groups.items():
+                    self._ensure_day_header(self.worksheet, day=d, month=m, is_debt=False)
+                    self.worksheet.append_rows(rows, value_input_option="USER_ENTERED")
+
+                self._format_worksheet(self.worksheet, is_debt=False)
+                print("Đã tổ chức lại Sổ Chi Tiêu thành công!")
+            except Exception as e:
+                print(f"Lỗi tổ chức lại Sổ Chi Tiêu: {e}")
+
+        # 2. Tổ chức lại Sổ Ghi Nợ
+        if self.debt_worksheet:
+            try:
+                all_debt_vals = self.debt_worksheet.get_all_values()
+                valid_debt_rows = []
+                for r in all_debt_vals[1:]:
+                    if r and len(r) >= 8 and r[0].startswith("NO"):
+                        valid_debt_rows.append(r[:8])
+
+                groups_debt: Dict[tuple, list] = {}
+                for r in valid_debt_rows:
+                    time_str = r[1]
+                    parsed_dt = None
+                    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+                        try:
+                            parsed_dt = datetime.strptime(time_str[:19], fmt)
+                            break
+                        except ValueError:
+                            pass
+                    if not parsed_dt:
+                        parsed_dt = datetime.now(config.TIMEZONE)
+
+                    key = (parsed_dt.year, parsed_dt.month, parsed_dt.day)
+                    if key not in groups_debt:
+                        groups_debt[key] = []
+                    groups_debt[key].append(r)
+
+                self.debt_worksheet.clear()
+                self.debt_worksheet.update(values=[HEADERS_DEBT], range_name="A1:H1")
+                self._format_worksheet(self.debt_worksheet, is_debt=True)
+
+                for (yr, m, d), rows in groups_debt.items():
+                    self._ensure_day_header(self.debt_worksheet, day=d, month=m, is_debt=True)
+                    self.debt_worksheet.append_rows(rows, value_input_option="USER_ENTERED")
+
+                self._format_worksheet(self.debt_worksheet, is_debt=True)
+                print("Đã tổ chức lại Sổ Ghi Nợ thành công!")
+            except Exception as e:
+                print(f"Lỗi tổ chức lại Sổ Ghi Nợ: {e}")
+
+        return True
 
 # Khởi tạo singleton instance
 sheets_service = SheetsService()
