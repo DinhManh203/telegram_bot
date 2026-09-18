@@ -716,3 +716,37 @@ async def daily_report_job(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Lỗi gửi báo cáo 21h tới chat_id {cid}: {e}")
 
+async def reminder_commands_job(context: ContextTypes.DEFAULT_TYPE):
+    """Job gửi nhắc nhở và danh sách câu lệnh định kỳ mỗi 3 giờ."""
+    chat_ids = get_all_subscribers()
+    if not chat_ids:
+        return
+
+    now = datetime.now(config.TIMEZONE)
+    # Không làm phiền vào ban đêm (từ 23h đến 7h sáng hôm sau)
+    if now.hour < 7 or now.hour >= 23:
+        return
+
+    text = (
+        f"⏰ **NHẮC NHỞ CHI TIÊU & DANH SÁCH LỆNH ({now.strftime('%H:%M')})**\n"
+        "────────────────────────\n"
+        "Bạn có khoản chi tiêu hoặc vay nợ nào vừa phát sinh cần ghi lại không?\n\n"
+        "⚡ **Các câu lệnh nhanh:**\n"
+        "• `/chitieu <nội dung>` — Ghi chi tiêu (vd: `/ct Cà phê 30k`)\n"
+        "• `/no <nội dung>` — Ghi nợ/vay (vd: `/no Cho Nam vay 500k`)\n"
+        "• `/trano <tên/mã>` — Đánh dấu khoản nợ đã trả\n"
+        "• `/homnay` — Xem chi tiêu ngày hôm nay\n"
+        "• `/baocao` — Báo cáo thu chi & sổ nợ tháng\n"
+        "• `/thongke` — Xem biểu đồ phân tích chi tiêu\n"
+        "• `/xem` — Xem lại các giao dịch gần nhất\n"
+        "• `/link` — Mở link Google Sheet\n\n"
+        "💬 Hoặc bạn chỉ cần nhắn trực tiếp: *\"Ăn trưa 40k\"*, *\"Lương về 15tr\"*, *\"Nam trả nợ 200k\"*..."
+    )
+
+    for cid in chat_ids:
+        try:
+            await context.bot.send_message(chat_id=cid, text=text, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Lỗi gửi nhắc nhở định kỳ 3h tới chat_id {cid}: {e}")
+
+

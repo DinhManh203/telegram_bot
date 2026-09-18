@@ -23,7 +23,8 @@ from handlers.command_handlers import (
     expense_command,
     pay_debt_command,
     unpay_debt_command,
-    daily_report_job
+    daily_report_job,
+    reminder_commands_job
 )
 from handlers.message_handlers import (
     handle_text_message,
@@ -129,6 +130,15 @@ def main():
         daily_time = time(hour=21, minute=0, second=0, tzinfo=config.TIMEZONE)
         app.job_queue.run_daily(daily_report_job, time=daily_time, name="daily_21h_expense_report")
         print("Đã thiết lập lịch gửi báo cáo tự động lúc 21:00 hàng ngày.")
+
+        # Lịch nhắc nhở và gửi danh sách câu lệnh định kỳ mỗi 3 tiếng (3 * 3600 giây)
+        app.job_queue.run_repeating(
+            reminder_commands_job,
+            interval=3 * 3600,
+            first=3 * 3600,
+            name="reminder_every_3_hours"
+        )
+        print("Đã thiết lập lịch nhắc nhở câu lệnh định kỳ mỗi 3 tiếng.")
 
     print("Bot đã sẵn sàng nhận tin nhắn trên Telegram.")
     # Bắt đầu chạy bot với cơ chế tự động thử lại (bootstrap_retries=10)
