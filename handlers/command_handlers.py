@@ -18,12 +18,15 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup(
 )
 
 async def check_user_access(update: Update) -> bool:
-    """Kiểm tra quyền truy cập của user."""
+    """Kiểm tra quyền truy cập của user và tự động lưu subscriber."""
     user = update.effective_user
     if not user or not config.is_user_allowed(user.id):
         if update.message:
             await update.message.reply_text("Bạn không có quyền sử dụng bot này.")
         return False
+    if update.effective_chat:
+        user_name = user.full_name or user.username or ""
+        save_subscriber(update.effective_chat.id, user_name)
     return True
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -674,11 +677,13 @@ async def link_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def daily_report_job(context: ContextTypes.DEFAULT_TYPE):
     """Job gửi báo cáo chi tiêu tự động lúc 21:00 hàng ngày."""
+    now = datetime.now(config.TIMEZONE)
+    print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Đang chạy daily_report_job 21h...")
     chat_ids = get_all_subscribers()
     if not chat_ids:
+        print(f"[{now.strftime('%H:%M:%S')}] Cảnh báo: Không có Chat ID nào để gửi báo cáo 21h.")
         return
 
-    now = datetime.now(config.TIMEZONE)
     today_str = now.strftime("%Y-%m-%d")
 
     month_txs = sheets_service.get_transactions_by_month(month=now.month, year=now.year)
@@ -716,18 +721,9 @@ async def daily_report_job(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Lỗi gửi báo cáo 21h tới chat_id {cid}: {e}")
 
-async def reminder_commands_job(context: ContextTypes.DEFAULT_TYPE):
-    """Job gửi nhắc nhở và danh sách câu lệnh định kỳ mỗi 3 giờ."""
-    chat_ids = get_all_subscribers()
-    if not chat_ids:
-        return
-
-    now = datetime.now(config.TIMEZONE)
-    # Không làm phiền vào ban đêm (từ 23h đến 7h sáng hôm sau)
-    if now.hour < 7 or now.hour >= 23:
-        return
-
-    text = (
+def build_reminder_message_text(now: datetime) -> str:
+    """Tạo nội dung tin nhắn nhắc nhở và hướng dẫn lệnh."""
+    return (
         f"⏰ **NHẮC NHỞ CHI TIÊU & DANH SÁCH LỆNH ({now.strftime('%H:%M')})**\n"
         "────────────────────────\n"
         "Bạn có khoản chi tiêu hoặc vay nợ nào vừa phát sinh cần ghi lại không?\n\n"
@@ -743,10 +739,52 @@ async def reminder_commands_job(context: ContextTypes.DEFAULT_TYPE):
         "💬 Hoặc bạn chỉ cần nhắn trực tiếp: *\"Ăn trưa 40k\"*, *\"Lương về 15tr\"*, *\"Nam trả nợ 200k\"*..."
     )
 
+async def reminder_commands_job(context: ContextTypes.DEFAULT_TYPE):
+    """Job gửi nhắc nhở và danh sách câu lệnh định kỳ mỗi 3 giờ."""
+    now = datetime.now(config.TIMEZONE)
+    print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Đang chạy reminder_commands_job...")
+
+    # Không làm phiền vào ban đêm (từ 23h đến 7h sáng hôm sau)
+    if now.hour < 7 or now.hour >= 23:
+        print(f"[{now.strftime('%H:%M:%S')}] Bỏ qua nhắc nhở vì đang trong khung giờ yên tĩnh (23h - 7h).")
+        return
+
+    chat_ids = get_all_subscribers()
+    if not chat_ids:
+        print(f"[{now.strftime('%H:%M:%S')}] Cảnh báo: Không có Chat ID nào trong Subscribers để gửi nhắc nhở.")
+        return
+
+    text = build_reminder_message_text(now)
+    success_count = 0
     for cid in chat_ids:
         try:
             await context.bot.send_message(chat_id=cid, text=text, parse_mode="Markdown")
+            success_count += 1
         except Exception as e:
             print(f"Lỗi gửi nhắc nhở định kỳ 3h tới chat_id {cid}: {e}")
+
+    print(f"[{now.strftime('%H:%M:%S')}] Đã gửi nhắc nhở thành công tới {success_count}/{len(chat_ids)} subscriber.")
+
+async def reminder_manual_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Xử lý lệnh /nhacnho hoặc /testnhacnho: Gửi ngay tin nhắn hướng dẫn và xác nhận đăng ký."""
+    if not await check_user_access(update):
+        return
+
+    await update.message.reply_chat_action("typing")
+    now = datetime.now(config.TIMEZONE)
+    text = build_reminder_message_text(now)
+    chat_id = update.effective_chat.id
+
+    try:
+        await update.message.reply_text(text, parse_mode="Markdown")
+        await update.message.reply_text(
+            f"✅ **Đã kích hoạt tin nhắn hướng dẫn/nhắc nhở thành công!**\n"
+            f"• Chat ID của bạn: `{chat_id}` đã được đồng bộ vào hệ thống.\n"
+            f"• Lịch gửi định kỳ mỗi 3 tiếng: `08:00`, `11:00`, `14:00`, `17:00`, `20:00` hàng ngày.\n"
+            f"• Báo cáo tổng kết ngày: `21:00` hàng ngày.",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"Lỗi gửi tin nhắc nhở: {e}")
 
 

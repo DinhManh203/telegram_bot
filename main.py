@@ -24,7 +24,8 @@ from handlers.command_handlers import (
     pay_debt_command,
     unpay_debt_command,
     daily_report_job,
-    reminder_commands_job
+    reminder_commands_job,
+    reminder_manual_command
 )
 from handlers.message_handlers import (
     handle_text_message,
@@ -118,6 +119,8 @@ def main():
     app.add_handler(CommandHandler("xoa", delete_command))
     app.add_handler(CommandHandler("delete", delete_command))
     app.add_handler(CommandHandler("link", link_command))
+    app.add_handler(CommandHandler("nhacnho", reminder_manual_command))
+    app.add_handler(CommandHandler("testnhacnho", reminder_manual_command))
 
     # Đăng ký xử lý tin nhắn hình ảnh (hóa đơn)
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo_message))
@@ -131,14 +134,16 @@ def main():
         app.job_queue.run_daily(daily_report_job, time=daily_time, name="daily_21h_expense_report")
         print("Đã thiết lập lịch gửi báo cáo tự động lúc 21:00 hàng ngày.")
 
-        # Lịch nhắc nhở và gửi danh sách câu lệnh định kỳ mỗi 3 tiếng (3 * 3600 giây)
-        app.job_queue.run_repeating(
-            reminder_commands_job,
-            interval=3 * 3600,
-            first=3 * 3600,
-            name="reminder_every_3_hours"
-        )
-        print("Đã thiết lập lịch nhắc nhở câu lệnh định kỳ mỗi 3 tiếng.")
+        # Lịch nhắc nhở và gửi danh sách câu lệnh định kỳ mỗi 3 tiếng vào ban ngày (08h, 11h, 14h, 17h, 20h)
+        reminder_hours = [8, 11, 14, 17, 20]
+        for h in reminder_hours:
+            reminder_time = time(hour=h, minute=0, second=0, tzinfo=config.TIMEZONE)
+            app.job_queue.run_daily(
+                reminder_commands_job,
+                time=reminder_time,
+                name=f"reminder_{h}h"
+            )
+        print(f"Đã thiết lập lịch nhắc nhở câu lệnh cố định mỗi 3 tiếng ({', '.join(f'{h}h' for h in reminder_hours)} hàng ngày).")
 
     print("Bot đã sẵn sàng nhận tin nhắn trên Telegram.")
     # Bắt đầu chạy bot với cơ chế tự động thử lại (bootstrap_retries=10)

@@ -31,6 +31,13 @@ HEADERS_DEBT = [
     "Trạng thái"
 ]
 
+HEADERS_SUBSCRIBERS = [
+    "Chat ID",
+    "Tên Người Dùng",
+    "Ngày Đăng Ký",
+    "Lần Tương Tác Cuối"
+]
+
 def parse_amount(val: Any) -> int:
     """Chuyển đổi an toàn giá trị tiền tệ sang số nguyên VNĐ."""
     if val is None or val == "":
@@ -56,6 +63,7 @@ class SheetsService:
         self.spreadsheet: Optional[gspread.Spreadsheet] = None
         self.worksheet: Optional[gspread.Worksheet] = None
         self.debt_worksheet: Optional[gspread.Worksheet] = None
+        self.subscribers_worksheet: Optional[gspread.Worksheet] = None
         self._init_connection()
 
     def _init_connection(self):
@@ -86,6 +94,7 @@ class SheetsService:
             self.client = gspread.authorize(creds)
             self._get_or_create_sheet()
             self._get_or_create_debt_sheet()
+            self._get_or_create_subscribers_sheet()
         except Exception as e:
             print(f"Lỗi kết nối Google Sheets: {e}")
 
@@ -1110,6 +1119,85 @@ class SheetsService:
                 print(f"Lỗi tổ chức lại Sổ Ghi Nợ: {e}")
 
         return True
+
+    def _get_or_create_subscribers_sheet(self):
+        """Tìm hoặc tạo tab riêng 'Subscribers' trong Google Sheet để lưu Chat ID lâu dài."""
+        if not self.spreadsheet:
+            return
+
+        try:
+            try:
+                self.subscribers_worksheet = self.spreadsheet.worksheet("Subscribers")
+            except gspread.exceptions.WorksheetNotFound:
+                print("Tạo tab mới 'Subscribers'...")
+                self.subscribers_worksheet = self.spreadsheet.add_worksheet(title="Subscribers", rows=100, cols=10)
+
+            existing_values = self.subscribers_worksheet.row_values(1)
+            if not existing_values or existing_values != HEADERS_SUBSCRIBERS:
+                if not existing_values:
+                    self.subscribers_worksheet.insert_row(HEADERS_SUBSCRIBERS, index=1)
+                else:
+                    self.subscribers_worksheet.update(values=[HEADERS_SUBSCRIBERS], range_name="A1:D1")
+        except Exception as e:
+            print(f"Lỗi khởi tạo Worksheet Subscribers: {e}")
+
+    def get_subscribers_from_sheet(self) -> List[int]:
+        """Lấy danh sách các Chat ID đã đăng ký từ tab Subscribers trên Google Sheet."""
+        if not self.subscribers_worksheet:
+            self._get_or_create_subscribers_sheet()
+        if not self.subscribers_worksheet:
+            return []
+
+        try:
+            records = self.subscribers_worksheet.get_all_values()
+            if len(records) <= 1:
+                return []
+
+            chat_ids = []
+            for row in records[1:]:
+                if row and row[0]:
+                    try:
+                        cid = int(str(row[0]).strip())
+                        if cid not in chat_ids:
+                            chat_ids.append(cid)
+                    except (ValueError, TypeError):
+                        pass
+            return chat_ids
+        except Exception as e:
+            print(f"Lỗi đọc danh sách subscribers từ Google Sheet: {e}")
+            return []
+
+    def save_subscriber_to_sheet(self, chat_id: int, user_name: str = ""):
+        """Lưu hoặc cập nhật Chat ID người dùng vào tab Subscribers trên Google Sheet."""
+        if not chat_id:
+            return
+        if not self.subscribers_worksheet:
+            self._get_or_create_subscribers_sheet()
+        if not self.subscribers_worksheet:
+            return
+
+        try:
+            now_str = datetime.now(config.TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+            records = self.subscribers_worksheet.get_all_values()
+
+            found_row = None
+            if len(records) > 1:
+                for idx, row in enumerate(records[1:], start=2):
+                    if row and str(row[0]).strip() == str(chat_id):
+                        found_row = idx
+                        break
+
+            if found_row:
+                prev_row = records[found_row - 1]
+                saved_username = user_name or (prev_row[1] if len(prev_row) > 1 else "")
+                reg_date = prev_row[2] if len(prev_row) > 2 and prev_row[2] else now_str
+                update_vals = [str(chat_id), saved_username, reg_date, now_str]
+                self.subscribers_worksheet.update(values=[update_vals], range_name=f"A{found_row}:D{found_row}")
+            else:
+                new_row = [str(chat_id), user_name, now_str, now_str]
+                self.subscribers_worksheet.append_row(new_row)
+        except Exception as e:
+            print(f"Lỗi lưu subscriber vào Google Sheet: {e}")
 
 # Khởi tạo singleton instance
 sheets_service = SheetsService()
