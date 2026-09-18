@@ -9,6 +9,7 @@ from services.chart_service import chart_service
 from services.subscriber_service import save_subscriber
 from handlers.command_handlers import (
     check_user_access,
+    start_command,
     report_command,
     chart_command,
     recent_command,
@@ -29,23 +30,26 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_name = user.full_name or user.username or "Unknown"
 
     # Kiểm tra các nút bấm trên bàn phím nhanh
-    if text == "📊 Báo cáo tháng":
+    if text in ("📊 Báo cáo tháng", "Báo cáo tháng"):
         await report_command(update, context)
         return
-    elif text == "📈 Biểu đồ chi tiêu":
+    elif text in ("📈 Biểu đồ chi tiêu", "Biểu đồ chi tiêu"):
         await chart_command(update, context)
         return
-    elif text == "📒 Sổ Ghi Nợ":
+    elif text in ("📒 Sổ Ghi Nợ", "Sổ Ghi Nợ"):
         await debt_command(update, context)
         return
-    elif text == "📝 Giao dịch gần đây":
+    elif text in ("📝 Giao dịch gần đây", "Giao dịch gần đây"):
         await recent_command(update, context)
         return
-    elif text == "📅 Hôm nay":
+    elif text in ("📅 Hôm nay", "Hôm nay"):
         await today_command(update, context)
         return
-    elif text == "🔗 Mở Google Sheet":
+    elif text in ("🔗 Mở Google Sheet", "Mở Google Sheet"):
         await link_command(update, context)
+        return
+    elif text.lower() in ("hướng dẫn", "huong dan", "help", "cách dùng", "cach dung", "trợ giúp", "tro giup"):
+        await start_command(update, context)
         return
 
     # Gửi trạng thái đang gõ phím

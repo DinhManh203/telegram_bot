@@ -33,17 +33,34 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_chat_action("typing")
     save_subscriber(update.effective_chat.id)
-    user = update.effective_user
     welcome_text = (
-        f"Xin chào **{user.first_name}**!\n"
-        f"Bot Quản Lý Tài Chính & Sổ Nợ đã sẵn sàng.\n\n"
-        f"────────────────────────\n"
-        f"**CÁCH SỬ DỤNG NHANH:**\n"
-        f"• **Ghi chi tiêu:** Nhắn `Ăn sáng 45k` hoặc gõ `/chitieu Ăn sáng 45k`\n"
-        f"• **Ghi nợ:** Nhắn `Cho Nam vay 500k` hoặc gõ `/no Cho Nam vay 500k`\n"
-        f"• **Xem báo cáo:** Gõ `/baocao` hoặc chọn menu bên dưới"
+        "Chào bạn! Tôi là Gấu Trắng trợ lý tài chính của bạn. "
+        "Tôi có thể giúp bạn quản lý chi tiêu, theo dõi công nợ cá nhân. Bạn có thể nhắn tin tự nhiên hoặc dùng các câu lệnh sau:\n\n"
+        "💬 **Nhắn tin tự nhiên:**\n"
+        "• **Ghi nợ/Cho vay:** \"Cho Nam vay 500k\", \"Tôi nợ Tuấn 1 triệu\"\n"
+        "• **Trả nợ:** \"Nam trả 200k\", \"Tuấn Anh đã trả hết nợ\"\n"
+        "• **Kiểm tra nợ:** \"Ai đang nợ tôi?\", \"Tuấn Anh còn nợ bao nhiêu?\"\n"
+        "• **Ghi chi tiêu/thu nhập:** \"Ăn phở 45k\", \"Lương về 15tr\"\n"
+        "• **Xóa giao dịch:** \"Xóa mã NO260820F66D\"\n"
+        "• **Thống kê:** \"Tháng này tiêu bao nhiêu?\"\n\n"
+        "⚡ **Danh sách câu lệnh (Commands):**\n"
+        "• `/chitieu <nội dung>` — Ghi chi tiêu hoặc xem tổng quan tháng\n"
+        "• `/no <nội dung>` — Ghi nợ hoặc xem danh sách nợ chưa trả\n"
+        "• `/trano <mã/tên>` — Đánh dấu khoản nợ đã trả\n"
+        "• `/chuatra <mã/tên>` — Chuyển lại trạng thái nợ (chưa trả)\n"
+        "• `/baocao` — Báo cáo tài chính thu chi & sổ nợ trong tháng\n"
+        "• `/thongke` — Xem biểu đồ phân tích cơ cấu chi tiêu\n"
+        "• `/homnay` — Xem chi tiêu trong ngày hôm nay\n"
+        "• `/xem` — Xem lại các giao dịch gần đây nhất\n"
+        "• `/xoa <mã GD>` — Xóa giao dịch khỏi bảng tính Google Sheet\n"
+        "• `/link` — Mở liên kết bảng tính Google Sheet\n\n"
+        "Hãy bắt đầu bằng cách ghi lại một khoản chi tiêu hoặc nợ nhé!"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Xử lý lệnh /help hoặc /huongdan."""
+    await start_command(update, context)
 
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Xử lý lệnh /baocao [tháng] [năm]: Báo cáo chi tiêu và các khoản nợ trong tháng."""

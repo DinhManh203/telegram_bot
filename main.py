@@ -1,5 +1,8 @@
 import logging
+import os
 import sys
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -9,6 +12,7 @@ from telegram.ext import (
 import config
 from handlers.command_handlers import (
     start_command,
+    help_command,
     report_command,
     chart_command,
     recent_command,
@@ -34,8 +38,36 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(b"Telegram Bot is running healthy!")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        # Ẩn log kiểm tra cổng tự động của Render để tránh rác log
+        pass
+
+def start_health_check_server():
+    """Chạy web server mini trong thread riêng để Render Web Service kiểm tra cổng (Health Check)."""
+    port = int(os.getenv("PORT", "10000"))
+    try:
+        server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+        logger.info(f"Health check web server đang lắng nghe trên cổng {port}...")
+        server.serve_forever()
+    except Exception as e:
+        logger.error(f"Lỗi khởi động health check web server: {e}")
+
 def main():
     """Khởi chạy Telegram Bot."""
+    # Khởi chạy health check web server ngầm cho Render Web Service
+    threading.Thread(target=start_health_check_server, daemon=True).start()
+
     if not config.TELEGRAM_BOT_TOKEN:
         print("=" * 60)
         print("LỖI: TELEGRAM_BOT_TOKEN chưa được thiết lập!")
@@ -59,6 +91,8 @@ def main():
 
     # Đăng ký các lệnh Command
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("huongdan", help_command))
     app.add_handler(CommandHandler("chitieu", expense_command))
     app.add_handler(CommandHandler("expense", expense_command))
     app.add_handler(CommandHandler("ct", expense_command))

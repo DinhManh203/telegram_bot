@@ -31,6 +31,7 @@ Bot Telegram thông minh ứng dụng **Google Gemini AI** giúp bạn ghi chép
 | Lệnh | Ý nghĩa |
 | :--- | :--- |
 | `/start` | Mở menu bàn phím và lời chào |
+| `/help` | Xem hướng dẫn sử dụng bot |
 | `/chitieu` | Xem tổng hợp chi tiêu tháng hiện tại |
 | `/no` | Xem danh sách các khoản nợ chưa trả |
 | `/baocao` | Báo cáo chi tiết cả chi tiêu và sổ nợ trong tháng |
