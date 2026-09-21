@@ -739,32 +739,6 @@ def build_reminder_message_text(now: datetime) -> str:
         "💬 Hoặc bạn chỉ cần nhắn trực tiếp: *\"Ăn trưa 40k\"*, *\"Lương về 15tr\"*, *\"Nam trả nợ 200k\"*..."
     )
 
-async def reminder_commands_job(context: ContextTypes.DEFAULT_TYPE):
-    """Job gửi nhắc nhở và danh sách câu lệnh định kỳ mỗi 3 giờ."""
-    now = datetime.now(config.TIMEZONE)
-    print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Đang chạy reminder_commands_job...")
-
-    # Không làm phiền vào ban đêm (từ 23h đến 7h sáng hôm sau)
-    if now.hour < 7 or now.hour >= 23:
-        print(f"[{now.strftime('%H:%M:%S')}] Bỏ qua nhắc nhở vì đang trong khung giờ yên tĩnh (23h - 7h).")
-        return
-
-    chat_ids = get_all_subscribers()
-    if not chat_ids:
-        print(f"[{now.strftime('%H:%M:%S')}] Cảnh báo: Không có Chat ID nào trong Subscribers để gửi nhắc nhở.")
-        return
-
-    text = build_reminder_message_text(now)
-    success_count = 0
-    for cid in chat_ids:
-        try:
-            await context.bot.send_message(chat_id=cid, text=text, parse_mode="Markdown")
-            success_count += 1
-        except Exception as e:
-            print(f"Lỗi gửi nhắc nhở định kỳ 3h tới chat_id {cid}: {e}")
-
-    print(f"[{now.strftime('%H:%M:%S')}] Đã gửi nhắc nhở thành công tới {success_count}/{len(chat_ids)} subscriber.")
-
 async def reminder_manual_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Xử lý lệnh /nhacnho hoặc /testnhacnho: Gửi ngay tin nhắn hướng dẫn và xác nhận đăng ký."""
     if not await check_user_access(update):
@@ -778,9 +752,8 @@ async def reminder_manual_command(update: Update, context: ContextTypes.DEFAULT_
     try:
         await update.message.reply_text(text, parse_mode="Markdown")
         await update.message.reply_text(
-            f"✅ **Đã kích hoạt tin nhắn hướng dẫn/nhắc nhở thành công!**\n"
+            f"✅ **Đã kích hoạt tin nhắn hướng dẫn thành công!**\n"
             f"• Chat ID của bạn: `{chat_id}` đã được đồng bộ vào hệ thống.\n"
-            f"• Lịch gửi định kỳ mỗi 3 tiếng: `08:00`, `11:00`, `14:00`, `17:00`, `20:00` hàng ngày.\n"
             f"• Báo cáo tổng kết ngày: `21:00` hàng ngày.",
             parse_mode="Markdown"
         )
