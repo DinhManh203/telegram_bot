@@ -747,17 +747,9 @@ async def reminder_manual_command(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_chat_action("typing")
     now = datetime.now(config.TIMEZONE)
     text = build_reminder_message_text(now)
-    chat_id = update.effective_chat.id
-
     try:
         await update.message.reply_text(text, parse_mode="Markdown")
-        await update.message.reply_text(
-            f"✅ **Đã kích hoạt tin nhắn hướng dẫn thành công!**\n"
-            f"• Chat ID của bạn: `{chat_id}` đã được đồng bộ vào hệ thống.\n"
-            f"• Báo cáo tổng kết ngày: `21:00` hàng ngày.",
-            parse_mode="Markdown"
-        )
     except Exception as e:
-        await update.message.reply_text(f"Lỗi gửi tin nhắc nhở: {e}")
+        await update.message.reply_text(f"Lỗi gửi tin: {e}")
 
 
