@@ -1,9 +1,11 @@
 import json
 import io
-import base64
-import httpx
+import re
+import time
+import asyncio
+import inspect
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple, Callable, Set
 from PIL import Image
 from google import genai
 from google.genai import types
@@ -117,10 +119,233 @@ def _extract_json(raw_text: str) -> Dict[str, Any]:
 
     raise Exception("Không thể trích xuất JSON hợp lệ từ phản hồi AI.")
 
+def parse_reset_time_info(error_text: str) -> Tuple[str, float]:
+    """
+    Trích xuất chuỗi hiển thị thời gian reset và số giây cooldown từ lỗi của Google Gemini API.
+    Ví dụ: 'Please retry in 15h55m54.801153382s' -> ('15h55m55s', 57355.0)
+    """
+    # 1. Trích xuất từ retryDelay: '57354s' hoặc retryDelay: 57354
+    m_delay = re.search(r"retryDelay['\":\s]+(\d+)s?", error_text, re.IGNORECASE)
+    if m_delay:
+        sec = int(m_delay.group(1))
+        cooldown = float(sec)
+        if sec >= 3600:
+            h = sec // 3600
+            m_rem = (sec % 3600) // 60
+            disp = f"{h}h{m_rem:02d}m" if m_rem else f"{h}h"
+        elif sec >= 60:
+            m = sec // 60
+            s_rem = sec % 60
+            disp = f"{m}m{s_rem:02d}s" if s_rem else f"{m}m"
+        else:
+            disp = f"{sec}s"
+        return disp, cooldown
+
+    # 2. Trích xuất từ regex "retry in/after" hoặc "try again in"
+    m_text = re.search(
+        r"(?:retry\s+(?:in|after)|try again in)\s+([0-9a-zA-Z\.\s]+?)(?=[,\n;]|\.\s|\.$|$|details)",
+        error_text,
+        re.IGNORECASE
+    )
+    if m_text:
+        raw_val = m_text.group(1).strip()
+        # Chuyển đổi số thập phân: 24.5s -> 25s, 15h55m54.8s -> 15h55m55s
+        def clean_decimal(match):
+            val = float(match.group(1) + "." + match.group(2))
+            unit = match.group(3) or ""
+            return f"{round(val)}{unit}"
+        clean_val = re.sub(r"(\d+)\.(\d+)([a-zA-Z]*)", clean_decimal, raw_val).strip()
+
+        hours = 0
+        mins = 0
+        secs = 0
+        h_m = re.search(r"(\d+)\s*(?:h|hour|hours)", clean_val, re.IGNORECASE)
+        m_m = re.search(r"(\d+)\s*(?:m|min|minute|minutes)", clean_val, re.IGNORECASE)
+        s_m = re.search(r"(\d+)\s*(?:s|sec|second|seconds)", clean_val, re.IGNORECASE)
+        if h_m:
+            hours = int(h_m.group(1))
+        if m_m:
+            mins = int(m_m.group(1))
+        if s_m:
+            secs = int(s_m.group(1))
+
+        calc_sec = hours * 3600 + mins * 60 + secs
+        if calc_sec > 0:
+            if "minute" in clean_val.lower():
+                disp = clean_val.replace("minutes", "phút").replace("minute", "phút")
+            elif "second" in clean_val.lower():
+                disp = clean_val.replace("seconds", "s").replace("second", "s")
+            else:
+                disp = clean_val
+            return disp, float(calc_sec)
+        elif clean_val:
+            return clean_val, 60.0
+
+    # 3. Trích xuất từ "resets in X"
+    m_reset = re.search(
+        r"(?:resets? in)\s+([0-9a-zA-Z\.\s]+?)(?=[,\n;]|\.\s|\.$|$|details)",
+        error_text,
+        re.IGNORECASE
+    )
+    if m_reset:
+        raw_val = m_reset.group(1).strip()
+        clean_val = re.sub(
+            r"(\d+)\.(\d+)([a-zA-Z]*)",
+            lambda m: f"{round(float(m.group(1) + '.' + m.group(2)))}{m.group(3) or ''}",
+            raw_val
+        ).strip()
+        if clean_val:
+            return clean_val, 60.0
+
+    return "vài phút", 60.0
+
+def is_quota_limit_error(err: Exception) -> bool:
+    """Kiểm tra xem lỗi có phải do chạm hạn mức (Rate limit/Quota/High demand) hay không."""
+    err_str = str(err).lower()
+    code = getattr(err, "code", None)
+    if code in (429, 503):
+        return True
+    keywords = [
+        "429", "503", "resource_exhausted", "quota", "rate limit",
+        "too many requests", "high demand", "unavailable", "temporarily overloaded",
+        "requests per minute", "requests per day", "tokens per minute", "tokens per day",
+        "free tier"
+    ]
+    return any(kw in err_str for kw in keywords)
+
+def is_discontinued_error(err: Exception) -> bool:
+    """Kiểm tra model đã bị ngừng hỗ trợ hoặc không tồn tại (404 Not Found)."""
+    err_str = str(err).lower()
+    code = getattr(err, "code", None)
+    if code == 404:
+        return True
+    return "404" in err_str or "not_found" in err_str or "is not found for api version" in err_str or "no longer available" in err_str
+
+MODEL_SPECS_METADATA = {
+    "gemini-2.5-flash": {
+        "category": "Dòng Flash Thế hệ 2.5 (Mặc định)",
+        "desc": "Tốc độ cao, tối ưu chuẩn tiếng Việt và bóc tách hóa đơn",
+        "rpd_limit": 1500,
+        "rpm_limit": 15,
+        "tpm_limit": "1,000,000",
+        "requires_billing": False
+    },
+    "gemini-2.5-flash-lite": {
+        "category": "Dòng Flash Lite (Tiết kiệm Quota)",
+        "desc": "Bản Flash siêu nhẹ của đời 2.5, phản hồi gần như tức thì",
+        "rpd_limit": 1500,
+        "rpm_limit": 15,
+        "tpm_limit": "1,000,000",
+        "requires_billing": False
+    },
+    "gemini-3.5-flash": {
+        "category": "Thế hệ 3.5 Mới nhất",
+        "desc": "Hiệu năng xử lý ngữ cảnh tiếng Việt đột phá",
+        "rpd_limit": 1000,
+        "rpm_limit": 15,
+        "tpm_limit": "1,000,000",
+        "requires_billing": False
+    },
+    "gemini-3.5-flash-lite": {
+        "category": "Bản rút gọn Thế hệ 3.5",
+        "desc": "Bản rút gọn hiệu năng cao của Gemini 3.5, tối ưu quota",
+        "rpd_limit": 1000,
+        "rpm_limit": 15,
+        "tpm_limit": "1,000,000",
+        "requires_billing": False
+    },
+    "gemini-3.8-flash": {
+        "category": "Thế hệ 3.8 Thử nghiệm",
+        "desc": "Phiên bản 3.8 của Google AI Studio, thông minh vượt trội",
+        "rpd_limit": 500,
+        "rpm_limit": 10,
+        "tpm_limit": "1,000,000",
+        "requires_billing": False
+    },
+    "gemini-3.7-flash": {
+        "category": "Thế hệ 3.7 Cân bằng",
+        "desc": "Cân bằng tốc độ và khả năng đọc hóa đơn",
+        "rpd_limit": 500,
+        "rpm_limit": 10,
+        "tpm_limit": "1,000,000",
+        "requires_billing": False
+    },
+    "gemini-2.5-pro": {
+        "category": "Dòng Pro Suy luận sâu",
+        "desc": "Dòng Pro cao cấp, suy luận sâu sắc cho bài toán phức tạp",
+        "rpd_limit": 50,
+        "rpm_limit": 2,
+        "tpm_limit": "32,000",
+        "requires_billing": False
+    },
+    "gemini-flash-latest": {
+        "category": "Alias Flash Mới nhất",
+        "desc": "Bí danh trỏ về bản Flash mới nhất của Google",
+        "rpd_limit": 1500,
+        "rpm_limit": 15,
+        "tpm_limit": "1,000,000",
+        "requires_billing": False
+    },
+    "gemini-pro-latest": {
+        "category": "Alias Pro Mới nhất",
+        "desc": "Bí danh trỏ về bản Pro cao cấp nhất của Google",
+        "rpd_limit": 50,
+        "rpm_limit": 2,
+        "tpm_limit": "32,000",
+        "requires_billing": False
+    },
+    "gemini-2.0-flash": {
+        "category": "Thế hệ 2.0 Kinh điển",
+        "desc": "Thế hệ 2.0 kinh điển cho API truyền thống",
+        "rpd_limit": 1500,
+        "rpm_limit": 15,
+        "tpm_limit": "1,000,000",
+        "requires_billing": False
+    },
+    "gemini-2.0-flash-lite": {
+        "category": "Thế hệ 2.0 Rút gọn",
+        "desc": "Bản rút gọn thế hệ 2.0",
+        "rpd_limit": 1500,
+        "rpm_limit": 15,
+        "tpm_limit": "1,000,000",
+        "requires_billing": False
+    },
+    "gemini-1.5-flash": {
+        "category": "Thế hệ 1.5 Tiêu chuẩn",
+        "desc": "Thế hệ 1.5 ban đầu, hạn mức độc lập",
+        "rpd_limit": 1500,
+        "rpm_limit": 15,
+        "tpm_limit": "1,000,000",
+        "requires_billing": False
+    },
+    "gemini-1.5-pro": {
+        "category": "Thế hệ 1.5 Pro",
+        "desc": "Thế hệ 1.5 Pro, khả năng phân tích ngữ cảnh lớn",
+        "rpd_limit": 50,
+        "rpm_limit": 2,
+        "tpm_limit": "32,000",
+        "requires_billing": False
+    }
+}
+
 class AIService:
     def __init__(self):
         self.client: Optional[genai.Client] = None
+        self.models: List[str] = list(config.GEMINI_MODELS)
+        self.current_model: str = self.models[0] if self.models else "gemini-2.5-flash"
+        self.model_cooldowns: Dict[str, float] = {}
+        self.model_reasons: Dict[str, str] = {}
+        self.model_requests: Dict[str, int] = {}
+        self.total_requests: int = 0
+        self.system_prompt: str = SYSTEM_PROMPT
+        self.discontinued_models: Set[str] = set()
+        self.is_online: bool = True
         self._init_client()
+
+    def toggle_online(self) -> bool:
+        """Bật/tắt trạng thái hoạt động của Bot từ Web Console."""
+        self.is_online = not self.is_online
+        return self.is_online
 
     def _init_client(self):
         """Khởi tạo Gemini Client."""
@@ -133,180 +358,384 @@ class AIService:
         except Exception as e:
             print(f"Lỗi khởi tạo Gemini Client: {e}")
 
-    def _analyze_text_gemini(self, text: str, prompt: str) -> Dict[str, Any]:
-        """Phân tích văn bản bằng Model chính (Google Gemini 2.5 Flash)."""
-        if not self.client:
-            self._init_client()
-            if not self.client:
-                raise Exception("Chưa cấu hình GEMINI_API_KEY.")
+    def get_candidate_models(self) -> List[str]:
+        """Lấy danh sách các model Gemini ưu tiên để thử gọi."""
+        now = time.time()
+        # Lọc các model hợp lệ (chưa bị 404)
+        valid_models = [m for m in self.models if m not in self.discontinued_models]
+        if not valid_models:
+            valid_models = list(self.models)
 
-        response = self.client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_text(text=f"Phân tích tin nhắn sau:\n{text}")
-                    ]
-                )
-            ],
-            config=types.GenerateContentConfig(
-                system_instruction=prompt,
-                response_mime_type="application/json",
-                temperature=0.1,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-            )
-        )
-        result_text = response.text.strip()
-        return _extract_json(result_text)
+        # Ưu tiên các model chưa hết hạn mức / không trong cooldown
+        ready_models = [m for m in valid_models if self.model_cooldowns.get(m, 0) <= now]
+        cooldown_models = [m for m in valid_models if self.model_cooldowns.get(m, 0) > now]
+        # Sắp xếp cooldown_models theo thời gian hết cooldown sớm nhất
+        cooldown_models.sort(key=lambda m: self.model_cooldowns.get(m, 0))
 
-    def _analyze_text_fallback(self, text: str, prompt: str) -> Dict[str, Any]:
-        """Phân tích văn bản bằng Model dự phòng (OpenRouter / OpenAI-compatible)."""
-        if not config.FALLBACK_AI_API_KEY:
-            raise Exception("Chưa cấu hình FALLBACK_AI_API_KEY.")
+        # Nếu model hiện tại đang ready, ưu tiên nó ở đầu danh sách
+        if self.current_model in ready_models:
+            ready_models.remove(self.current_model)
+            ready_models.insert(0, self.current_model)
 
-        url = f"{config.FALLBACK_AI_BASE_URL.rstrip('/')}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {config.FALLBACK_AI_API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/SutieXuXi203/telegram_bot_wallet",
-            "X-Title": "Telegram Wallet Bot"
-        }
-        payload = {
-            "model": config.FALLBACK_AI_MODEL,
-            "messages": [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": f"Phân tích tin nhắn sau:\n{text}"}
-            ],
-            "temperature": 0.1
-        }
+        return ready_models + cooldown_models
 
-        res = httpx.post(url, headers=headers, json=payload, timeout=35.0)
-        if res.status_code != 200:
-            raise Exception(f"Fallback Model trả về mã lỗi {res.status_code}: {res.text[:200]}")
+    def _trigger_switch_notice(
+        self,
+        current_model: str,
+        reset_str: str,
+        next_model: str,
+        on_model_switch: Optional[Callable[[str], Any]]
+    ) -> str:
+        """Tạo thông báo chuyển model và kích hoạt callback gửi tin nhắn tới Telegram."""
+        notice = f"⚠️ Model `{current_model}` đã tới giới hạn (còn {reset_str} reset) chuyển qua model `{next_model}`"
+        print(f"[AIService] {notice}")
 
-        content = res.json()["choices"][0]["message"]["content"]
-        return _extract_json(content)
+        if on_model_switch:
+            try:
+                res = on_model_switch(notice)
+                if inspect.isawaitable(res):
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(res)
+                    except RuntimeError:
+                        pass
+            except Exception as cb_err:
+                print(f"[AIService] Lỗi callback chuyển model: {cb_err}")
 
-    def analyze_text(self, text: str) -> Dict[str, Any]:
-        """Phân tích tin nhắn văn bản với cơ chế tự động chuyển sang Model dự phòng khi lỗi."""
+        return notice
+
+    def analyze_text(
+        self,
+        text: str,
+        on_model_switch: Optional[Callable[[str], Any]] = None
+    ) -> Dict[str, Any]:
+        """Phân tích tin nhắn văn bản với cơ chế tự động chuyển model Gemini khi chạm giới hạn."""
         now_str = datetime.now(config.TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
         prompt = SYSTEM_PROMPT.format(current_time=now_str)
 
-        # 1. Thử gọi Model chính (Google Gemini)
-        if config.GEMINI_API_KEY:
-            try:
-                return self._analyze_text_gemini(text, prompt)
-            except Exception as e:
-                print(f"Model chính Gemini gặp sự cố ({e}). Đang chuyển sang Model dự phòng ({config.FALLBACK_AI_MODEL})...")
+        if not config.GEMINI_API_KEY:
+            return {
+                "intent": "CHAT",
+                "transactions": [],
+                "debt_items": [],
+                "reply_message": "Chưa cấu hình GEMINI_API_KEY trong file .env."
+            }
 
-        # 2. Chuyển sang Model dự phòng nếu Model chính lỗi hoặc chưa có key
-        if config.FALLBACK_AI_API_KEY:
+        if not self.client:
+            self._init_client()
+            if not self.client:
+                return {
+                    "intent": "CHAT",
+                    "transactions": [],
+                    "debt_items": [],
+                    "reply_message": "Không thể kết nối tới Google Gemini Client."
+                }
+
+        candidates = self.get_candidate_models()
+        notices: List[str] = []
+
+        for idx, model_name in enumerate(candidates):
+            now = time.time()
+            if self.model_cooldowns.get(model_name, 0) > now and idx < len(candidates) - 1:
+                continue
+
             try:
-                return self._analyze_text_fallback(text, prompt)
-            except Exception as e2:
-                print(f"Model dự phòng ({config.FALLBACK_AI_MODEL}) cũng gặp lỗi: {e2}")
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=[types.Part.from_text(text=f"Phân tích tin nhắn sau:\n{text}")]
+                        )
+                    ],
+                    config=types.GenerateContentConfig(
+                        system_instruction=prompt,
+                        response_mime_type="application/json",
+                        temperature=0.1,
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                    )
+                )
+                result_text = response.text.strip()
+                result_json = _extract_json(result_text)
+                self.current_model = model_name
+                result_json["active_model"] = model_name
+                result_json["model_switch_notices"] = notices
+                return result_json
+
+            except Exception as e:
+                err_str = str(e)
+                print(f"[AIService] Model {model_name} gặp lỗi: {err_str[:120]}")
+
+                # 1. Nếu là model không còn hỗ trợ (404)
+                if is_discontinued_error(e):
+                    self.discontinued_models.add(model_name)
+                    continue
+
+                # 2. Nếu là lỗi hết hạn mức / rate limit / 503 high demand
+                if is_quota_limit_error(e):
+                    reset_disp, cooldown_sec = parse_reset_time_info(err_str)
+                    self.model_cooldowns[model_name] = time.time() + cooldown_sec
+
+                    # Tìm model kế tiếp chưa bị loại
+                    next_models = [m for m in candidates[idx + 1:] if m not in self.discontinued_models]
+                    if not next_models:
+                        next_models = [m for m in self.models if m != model_name and m not in self.discontinued_models]
+
+                    next_model_name = next_models[0] if next_models else "dự phòng tiếp theo"
+                    notice = self._trigger_switch_notice(
+                        current_model=model_name,
+                        reset_str=reset_disp,
+                        next_model=next_model_name,
+                        on_model_switch=on_model_switch
+                    )
+                    notices.append(notice)
+                    continue
+
+                # 3. Lỗi khác
+                continue
 
         return {
             "intent": "CHAT",
             "transactions": [],
             "debt_items": [],
-            "reply_message": "Xin lỗi, hiện tại không thể kết nối tới các dịch vụ AI để xử lý tin nhắn."
+            "reply_message": "Tất cả các model AI hiện tại đều đang đạt giới hạn hạn mức hoặc tạm thời không khả dụng. Vui lòng thử lại sau!",
+            "model_switch_notices": notices
         }
 
-    def _analyze_image_gemini(self, image_bytes: bytes, prompt_instruction: str, prompt: str) -> Dict[str, Any]:
-        """Quét ảnh bằng Model chính (Google Gemini 2.5 Flash)."""
-        if not self.client:
-            self._init_client()
-            if not self.client:
-                raise Exception("Chưa cấu hình GEMINI_API_KEY.")
-
-        response = self.client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_text(text=prompt_instruction),
-                        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-                    ]
-                )
-            ],
-            config=types.GenerateContentConfig(
-                system_instruction=prompt,
-                response_mime_type="application/json",
-                temperature=0.1,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-            )
-        )
-        result_text = response.text.strip()
-        return _extract_json(result_text)
-
-    def _analyze_image_fallback(self, image_bytes: bytes, prompt_instruction: str, prompt: str) -> Dict[str, Any]:
-        """Quét ảnh bằng Model dự phòng (OpenRouter Vision)."""
-        if not config.FALLBACK_AI_API_KEY:
-            raise Exception("Chưa cấu hình FALLBACK_AI_API_KEY.")
-
-        base64_img = base64.b64encode(image_bytes).decode('utf-8')
-        image_url = f"data:image/jpeg;base64,{base64_img}"
-
-        url = f"{config.FALLBACK_AI_BASE_URL.rstrip('/')}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {config.FALLBACK_AI_API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/SutieXuXi203/telegram_bot_wallet",
-            "X-Title": "Telegram Wallet Bot"
-        }
-        payload = {
-            "model": config.FALLBACK_AI_MODEL,
-            "messages": [
-                {"role": "system", "content": prompt},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt_instruction},
-                        {"type": "image_url", "image_url": {"url": image_url}}
-                    ]
-                }
-            ],
-            "temperature": 0.1
-        }
-
-        res = httpx.post(url, headers=headers, json=payload, timeout=40.0)
-        if res.status_code != 200:
-            raise Exception(f"Fallback Model trả về mã lỗi {res.status_code}: {res.text[:200]}")
-
-        content = res.json()["choices"][0]["message"]["content"]
-        return _extract_json(content)
-
-    def analyze_image(self, image_bytes: bytes, caption: Optional[str] = None) -> Dict[str, Any]:
-        """Phân tích ảnh chụp hóa đơn / biên lai với cơ chế tự động chuyển đổi sang Model dự phòng."""
+    def analyze_image(
+        self,
+        image_bytes: bytes,
+        caption: Optional[str] = None,
+        on_model_switch: Optional[Callable[[str], Any]] = None
+    ) -> Dict[str, Any]:
+        """Phân tích ảnh hóa đơn/biên lai với cơ chế tự động chuyển model Gemini khi chạm giới hạn."""
         now_str = datetime.now(config.TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
         prompt = SYSTEM_PROMPT.format(current_time=now_str)
         prompt_instruction = "Đây là ảnh hóa đơn/biên lai. Hãy đọc hóa đơn và trích xuất các khoản chi tiêu."
         if caption:
             prompt_instruction += f"\nGhi chú kèm theo của người dùng: {caption}"
 
-        # 1. Thử gọi Model chính (Google Gemini)
-        if config.GEMINI_API_KEY:
-            try:
-                return self._analyze_image_gemini(image_bytes, prompt_instruction, prompt)
-            except Exception as e:
-                print(f"Model chính Gemini gặp sự cố đọc ảnh ({e}). Đang chuyển sang Model dự phòng ({config.FALLBACK_AI_MODEL})...")
+        if not config.GEMINI_API_KEY:
+            return {
+                "intent": "CHAT",
+                "transactions": [],
+                "debt_items": [],
+                "reply_message": "Chưa cấu hình GEMINI_API_KEY trong file .env."
+            }
 
-        # 2. Chuyển sang Model dự phòng (GPT-4o Vision)
-        if config.FALLBACK_AI_API_KEY:
+        if not self.client:
+            self._init_client()
+            if not self.client:
+                return {
+                    "intent": "CHAT",
+                    "transactions": [],
+                    "debt_items": [],
+                    "reply_message": "Không thể kết nối tới Google Gemini Client."
+                }
+
+        candidates = self.get_candidate_models()
+        notices: List[str] = []
+
+        for idx, model_name in enumerate(candidates):
+            now = time.time()
+            if self.model_cooldowns.get(model_name, 0) > now and idx < len(candidates) - 1:
+                continue
+
             try:
-                return self._analyze_image_fallback(image_bytes, prompt_instruction, prompt)
-            except Exception as e2:
-                print(f"Model dự phòng ({config.FALLBACK_AI_MODEL}) đọc ảnh gặp lỗi: {e2}")
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=[
+                                types.Part.from_text(text=prompt_instruction),
+                                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+                            ]
+                        )
+                    ],
+                    config=types.GenerateContentConfig(
+                        system_instruction=prompt,
+                        response_mime_type="application/json",
+                        temperature=0.1,
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                    )
+                )
+                result_text = response.text.strip()
+                result_json = _extract_json(result_text)
+                self.current_model = model_name
+                result_json["active_model"] = model_name
+                result_json["model_switch_notices"] = notices
+                return result_json
+
+            except Exception as e:
+                err_str = str(e)
+                print(f"[AIService] Model {model_name} đọc ảnh thất bại: {err_str[:120]}")
+
+                if is_discontinued_error(e):
+                    self.discontinued_models.add(model_name)
+                    continue
+
+                if is_quota_limit_error(e):
+                    reset_disp, cooldown_sec = parse_reset_time_info(err_str)
+                    self.model_cooldowns[model_name] = time.time() + cooldown_sec
+
+                    next_models = [m for m in candidates[idx + 1:] if m not in self.discontinued_models]
+                    if not next_models:
+                        next_models = [m for m in self.models if m != model_name and m not in self.discontinued_models]
+
+                    next_model_name = next_models[0] if next_models else "dự phòng tiếp theo"
+                    notice = self._trigger_switch_notice(
+                        current_model=model_name,
+                        reset_str=reset_disp,
+                        next_model=next_model_name,
+                        on_model_switch=on_model_switch
+                    )
+                    notices.append(notice)
+                    continue
+
+                continue
 
         return {
             "intent": "CHAT",
             "transactions": [],
             "debt_items": [],
-            "reply_message": "Không thể đọc thông tin từ ảnh do các dịch vụ AI tạm thời không khả dụng."
+            "reply_message": "Không thể đọc thông tin từ ảnh do tất cả các model AI đều đang đạt hạn mức hoặc không khả dụng.",
+            "model_switch_notices": notices
+        }
+
+    def test_model(self, model_name: str) -> Dict[str, Any]:
+        """Thử nghiệm nhanh gọi 1 model để kiểm tra hạn mức."""
+        if not self.client:
+            self._init_client()
+        if not self.client:
+            return {"status": "FAIL", "model": model_name, "duration": 0, "reason": "Chưa có GEMINI_API_KEY"}
+
+        start = time.time()
+        try:
+            resp = self.client.models.generate_content(
+                model=model_name,
+                contents="Ping",
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                )
+            )
+            duration = round(time.time() - start, 2)
+            self.model_cooldowns.pop(model_name, None)
+            self.model_reasons.pop(model_name, None)
+            return {"status": "OK", "model": model_name, "duration": duration, "message": "Hoạt động tốt"}
+        except Exception as e:
+            duration = round(time.time() - start, 2)
+            err_str = str(e)
+            if is_quota_limit_error(e):
+                reset_disp, cooldown_sec = parse_reset_time_info(err_str)
+                self.model_cooldowns[model_name] = time.time() + cooldown_sec
+                self.model_reasons[model_name] = f"Hết limit ({reset_disp})"
+                return {"status": "FAIL", "model": model_name, "duration": duration, "reason": f"Hết limit ({reset_disp})"}
+            elif is_discontinued_error(e):
+                self.discontinued_models.add(model_name)
+                return {"status": "FAIL", "model": model_name, "duration": duration, "reason": "404 Not Found"}
+            return {"status": "FAIL", "model": model_name, "duration": duration, "reason": err_str[:80]}
+
+    def get_status_dict(self) -> Dict[str, Any]:
+        """Tổng hợp toàn bộ thông tin trạng thái theo định dạng Console Dashboard."""
+        now = time.time()
+        primary_model = self.models[0] if self.models else "gemini-2.5-flash"
+        models_data = []
+        ready_count = 0
+        exhausted_count = 0
+
+        for m in self.models:
+            meta = MODEL_SPECS_METADATA.get(m, {
+                "category": "Google Gemini",
+                "desc": "Mô hình ngôn ngữ đa phương thức của Google",
+                "rpd_limit": 1500,
+                "rpm_limit": 15,
+                "tpm_limit": "1,000,000",
+                "requires_billing": False
+            })
+
+            cooldown_until = self.model_cooldowns.get(m, 0)
+            is_cooldown = cooldown_until > now
+            rem_sec = max(0, int(cooldown_until - now)) if is_cooldown else 0
+
+            if rem_sec >= 3600:
+                h = rem_sec // 3600
+                m_rem = (rem_sec % 3600) // 60
+                rem_fmt = f"{h}h {m_rem:02d}m" if m_rem else f"{h}h"
+            elif rem_sec >= 60:
+                m_val = rem_sec // 60
+                s_val = rem_sec % 60
+                rem_fmt = f"{m_val}m {s_val:02d}s" if s_val else f"{m_val}m"
+            elif rem_sec > 0:
+                rem_fmt = f"{rem_sec}s"
+            else:
+                rem_fmt = "0s"
+
+            if is_cooldown:
+                exhausted_count += 1
+            else:
+                ready_count += 1
+
+            rpd_used = self.model_requests.get(m, 0)
+            rpd_limit = meta.get("rpd_limit", 1500)
+            percent = round((rpd_used / rpd_limit) * 100, 1) if rpd_limit > 0 else 0
+
+            models_data.append({
+                "name": m,
+                "is_active": (m == self.current_model),
+                "is_primary": (m == primary_model),
+                "is_cooldown": is_cooldown,
+                "expiry_timestamp": cooldown_until if is_cooldown else 0,
+                "remaining_formatted": rem_fmt,
+                "reason": self.model_reasons.get(m, ""),
+                "quota": {
+                    "category": meta.get("category", ""),
+                    "desc": meta.get("desc", ""),
+                    "rpd_used": rpd_used,
+                    "rpd_limit": rpd_limit,
+                    "rpm_used": 0,
+                    "rpm_limit": meta.get("rpm_limit", 15),
+                    "tpm_limit": meta.get("tpm_limit", "1,000,000"),
+                    "quota_percent": percent,
+                    "requires_billing": meta.get("requires_billing", False)
+                }
+            })
+
+        return {
+            "bot": {
+                "online": self.is_online,
+                "name": "Gấu Trắng",
+                "username": "polarbear_wallet_bot",
+                "id": "8807144463",
+                "latency_ms": 15,
+                "guilds_count": 1,
+                "guilds_summary": "Sổ Chi Tiêu Google Sheets",
+                "guilds": [
+                    {
+                        "id": config.SPREADSHEET_ID_OR_NAME[:18] if config.SPREADSHEET_ID_OR_NAME else "telegram_bot",
+                        "name": "Sổ Chi Tiêu & Công Nợ Cá Nhân",
+                        "member_count": 1,
+                        "is_admin": True,
+                        "has_specific_channel": "Sổ Thu Chi",
+                        "icon": None
+                    }
+                ]
+            },
+            "quota": {
+                "current_active": self.current_model,
+                "primary": primary_model,
+                "total_daily_requests": self.total_requests,
+                "ready_count": ready_count,
+                "exhausted_count": exhausted_count,
+                "models": models_data
+            },
+            "settings": {
+                "specific_channel": config.ALLOWED_USER_IDS_RAW,
+                "spreadsheet_id": config.SPREADSHEET_ID_OR_NAME,
+                "timezone": config.TIMEZONE_STR
+            },
+            "prompt": self.system_prompt
         }
 
 ai_service = AIService()
-

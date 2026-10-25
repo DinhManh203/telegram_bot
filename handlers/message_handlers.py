@@ -17,6 +17,19 @@ from handlers.command_handlers import (
     link_command,
     debt_command
 )
+def make_model_switch_notifier(update: Update):
+    """Tạo callback gửi thông báo chuyển model về Telegram ngay lập tức."""
+    async def notify(switch_msg: str):
+        try:
+            if update and update.effective_message:
+                await update.effective_message.reply_text(switch_msg, parse_mode="Markdown")
+        except Exception:
+            try:
+                if update and update.effective_message:
+                    await update.effective_message.reply_text(switch_msg)
+            except Exception:
+                pass
+    return notify
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Xử lý tin nhắn văn bản từ người dùng."""
@@ -24,6 +37,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     save_subscriber(update.effective_chat.id)
+    if not ai_service.is_online:
+        await update.message.reply_text("⏸ Bot đang ở chế độ tạm dừng (Standby) từ Web Console.\nVui lòng bật lại bot trên giao diện quản trị để tiếp tục.")
+        return
+
     text = update.message.text.strip()
     user = update.effective_user
     user_id = user.id
@@ -55,8 +72,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Gửi trạng thái đang gõ phím
     await update.message.reply_chat_action("typing")
 
-    # Phân tích văn bản bằng Gemini AI
-    ai_result = ai_service.analyze_text(text)
+    # Phân tích văn bản bằng Gemini AI (kèm cơ chế tự động luân chuyển model khi chạm giới hạn)
+    ai_result = ai_service.analyze_text(text, on_model_switch=make_model_switch_notifier(update))
     intent = ai_result.get("intent", "CHAT")
     text_lower = text.lower()
 
@@ -391,6 +408,10 @@ async def handle_photo_message(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     save_subscriber(update.effective_chat.id)
+    if not ai_service.is_online:
+        await update.message.reply_text("⏸ Bot đang ở chế độ tạm dừng (Standby) từ Web Console.\nVui lòng bật lại bot trên giao diện quản trị để tiếp tục.")
+        return
+
     user = update.effective_user
     user_id = user.id
     user_name = user.full_name or user.username or "Unknown"
@@ -404,7 +425,7 @@ async def handle_photo_message(update: Update, context: ContextTypes.DEFAULT_TYP
         photo_bytes = await photo_file.download_as_bytearray()
         caption = update.message.caption
 
-        ai_result = ai_service.analyze_image(bytes(photo_bytes), caption=caption)
+        ai_result = ai_service.analyze_image(bytes(photo_bytes), caption=caption, on_model_switch=make_model_switch_notifier(update))
         transactions = ai_result.get("transactions", [])
 
         if not transactions:

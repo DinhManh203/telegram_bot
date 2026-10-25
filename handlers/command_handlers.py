@@ -29,6 +29,20 @@ async def check_user_access(update: Update) -> bool:
         save_subscriber(update.effective_chat.id, user_name)
     return True
 
+def make_model_switch_notifier(update: Update):
+    """Tạo callback gửi thông báo chuyển model về Telegram ngay lập tức."""
+    async def notify(switch_msg: str):
+        try:
+            if update and update.effective_message:
+                await update.effective_message.reply_text(switch_msg, parse_mode="Markdown")
+        except Exception:
+            try:
+                if update and update.effective_message:
+                    await update.effective_message.reply_text(switch_msg)
+            except Exception:
+                pass
+    return notify
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Xử lý lệnh /start."""
     if not await check_user_access(update):
@@ -196,7 +210,7 @@ async def expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         raw_text = " ".join(context.args)
         await update.message.reply_chat_action("typing")
 
-        ai_res = ai_service.analyze_text(raw_text)
+        ai_res = ai_service.analyze_text(raw_text, on_model_switch=make_model_switch_notifier(update))
         transactions = ai_res.get("transactions", [])
 
         if not transactions:
@@ -270,7 +284,7 @@ async def debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_chat_action("typing")
 
-        ai_res = ai_service.analyze_text(raw_text)
+        ai_res = ai_service.analyze_text(raw_text, on_model_switch=make_model_switch_notifier(update))
         debt_items = ai_res.get("debt_items", [])
 
         if not debt_items and ai_res.get("transactions"):
@@ -378,7 +392,7 @@ async def pay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     person = ""
     amount = None
     if remaining_text:
-        ai_res = ai_service.analyze_text(f"{remaining_text} trả nợ")
+        ai_res = ai_service.analyze_text(f"{remaining_text} trả nợ", on_model_switch=make_model_switch_notifier(update))
         person = ai_res.get("person") or ""
         amount = ai_res.get("amount")
 
@@ -479,7 +493,7 @@ async def unpay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     person = ""
     amount = None
     if remaining_text:
-        ai_res = ai_service.analyze_text(f"{remaining_text} nợ")
+        ai_res = ai_service.analyze_text(f"{remaining_text} nợ", on_model_switch=make_model_switch_notifier(update))
         person = ai_res.get("person") or ""
         amount = ai_res.get("amount")
 

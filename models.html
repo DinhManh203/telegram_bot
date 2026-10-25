@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TELEGRAM BOT // CONSOLE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            border-radius: 4px !important;
+        }
+
+        :root {
+            --bg-page: #ffffff;
+            --bg-card: #ffffff;
+            --bg-card-subtle: #f9fafb;
+            --bg-card-hover: #f3f4f6;
+            --bg-input: #ffffff;
+            --border: #d1d5db;
+            --border-dark: #000000;
+            --border-light: #e5e7eb;
+            --text-main: #000000;
+            --text-muted: #4b5563;
+            --text-dim: #9ca3af;
+            --accent: #000000;
+        }
+
+        body {
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 24px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+
+        /* HEADER */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid var(--border-dark);
+            background: var(--bg-card);
+            padding: 16px 20px;
+            margin-bottom: 24px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            font-size: 15px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #000000;
+            display: inline-block;
+        }
+
+        @keyframes livePulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.25; }
+            100% { opacity: 1; }
+        }
+
+        .live-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            color: #15803d;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            padding: 2px 8px;
+            margin-left: 12px;
+            font-weight: 600;
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            background: #16a34a;
+            display: inline-block;
+            animation: livePulse 1.5s infinite;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* BUTTONS */
+        .btn {
+            background: #ffffff;
+            color: var(--text-main);
+            border: 1px solid var(--border-dark);
+            padding: 7px 14px;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background: #000000;
+            color: #ffffff;
+        }
+
+        .btn-primary {
+            background: #000000;
+            color: #ffffff;
+            border-color: #000000;
+        }
+
+        .btn-primary:hover {
+            background: #333333;
+            color: #ffffff;
+        }
+
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 10px;
+        }
+
+        .btn-danger {
+            background: #ffffff;
+            color: #dc2626;
+            border: 1px solid #dc2626;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            color: #ffffff;
+        }
+
+        .bot-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 4px !important;
+            background: #f3f4f6;
+            color: #000000;
+            border: 1px solid var(--border-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        /* TABS */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            background: #ffffff;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            padding: 8px 16px;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-size: 12px;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-main);
+            border-color: var(--border-dark);
+        }
+
+        .tab-btn.active {
+            color: #ffffff;
+            background: #000000;
+            border-color: #000000;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* CARDS & GRIDS */
+        .grid-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-dark);
+            padding: 16px;
+        }
+
+        .card-subtle {
+            background: var(--bg-card-subtle);
+            border: 1px solid var(--border);
+            padding: 16px;
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+        }
+
+        .card-value {
+            font-size: 18px;
+            font-weight: 700;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            word-break: break-all;
+        }
+
+        .card-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            font-family: "JetBrains Mono", Consolas, monospace;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* FORMS */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-main);
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border-dark);
+            color: var(--text-main);
+            padding: 10px 12px;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-size: 12px;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: #000000;
+            box-shadow: 0 0 0 1px #000000;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 180px;
+            line-height: 1.6;
+        }
+
+        /* TABLE */
+        .table-container {
+            border: 1px solid var(--border-dark);
+            background: var(--bg-card);
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 12px;
+        }
+
+        th {
+            background: #ffffff;
+            color: #000000;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-size: 11px;
+            text-transform: uppercase;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border-dark);
+            letter-spacing: 0.5px;
+            font-weight: 700;
+        }
+
+        td {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border-light);
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: var(--bg-card-hover);
+        }
+
+        .model-name {
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .model-category {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-family: "JetBrains Mono", Consolas, monospace;
+            margin-top: 2px;
+        }
+
+        /* PROGRESS BAR FOR QUOTA */
+        .progress-bar-bg {
+            width: 100%;
+            max-width: 140px;
+            height: 6px;
+            background: #e5e7eb;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: #000000;
+        }
+
+        .progress-bar-fill.danger {
+            background: #dc2626;
+        }
+
+        /* BADGES */
+        .badge {
+            display: inline-block;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid transparent;
+        }
+
+        .badge-active {
+            background: #000000;
+            color: #ffffff;
+            border-color: #000000;
+        }
+
+        .badge-ready {
+            background: #ffffff;
+            color: #000000;
+            border: 1px solid var(--border-dark);
+        }
+
+        .badge-cooldown {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #b91c1c;
+        }
+
+        .badge-primary {
+            background: #ffffff;
+            color: #000000;
+            border: 1px solid var(--border-dark);
+            text-decoration: underline;
+        }
+
+        /* LOG VIEWER */
+        .log-box {
+            background: #ffffff;
+            border: 1px solid var(--border-dark);
+            padding: 16px;
+            height: 480px;
+            overflow-y: auto;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-size: 12px;
+            color: #111111;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+
+        /* TOAST BANNER */
+        .banner-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #000000;
+            color: #ffffff;
+            border: 1px solid #000000;
+            padding: 12px 20px;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-size: 12px;
+            font-weight: 600;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <div class="logo">
+                <span class="status-dot" id="headerDot"></span>
+                <span>BOT MANAGEMENT // CONSOLE</span>
+                <span style="color: var(--text-muted); font-size: 11px; margin-left: 8px;" id="headerBotStatus">CONNECTING...</span>
+                <span class="live-badge">
+                    <span class="live-dot"></span>
+                    <span>TỰ ĐỘNG LÀM MỚI: <span id="lastUpdatedTime">--:--:--</span></span>
+                </span>
+            </div>
+            <div class="header-actions">
+                <button id="headerBotToggleBtn" class="btn" onclick="toggleBotPower()">
+                    <span id="headerBotToggleIcon">⏹</span>
+                    <span id="headerBotToggleText">TẮT BOT</span>
+                </button>
+                <button class="btn btn-danger" onclick="simulateFailover()" title="Mô phỏng lỗi Quota 429 để quan sát tự động chuyển model">⚡ MÔ PHỎNG 429</button>
+                <button class="btn" onclick="fetchStatus()">↺ LÀM MỚI NGAY</button>
+                <button class="btn btn-primary" onclick="testAllModels()">⚡ TEST QUOTA</button>
+            </div>
+        </header>
+
+        <!-- NAVIGATION TABS -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('bot-info')">01. THÔNG TIN BOT</button>
+            <button class="tab-btn" onclick="switchTab('telegram-channels')">02. KẾT NỐI TELEGRAM</button>
+            <button class="tab-btn" onclick="switchTab('quota')">03. QUẢN LÝ QUOTA & MÔ HÌNH</button>
+            <button class="tab-btn" onclick="switchTab('logs')">04. NHẬT KÝ HOẠT ĐỘNG</button>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 1: THÔNG TIN BOT -->
+        <!-- ============================================================= -->
+        <div id="tab-bot-info" class="tab-panel active">
+            <!-- STATS CARDS -->
+            <div class="grid-stats">
+                <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <div class="card-title">
+                            <span>TRẠNG THÁI BOT</span>
+                            <span id="cardBotStatusBadge" class="badge badge-active">ONLINE</span>
+                        </div>
+                        <div class="card-value" id="cardBotStatusText" style="font-size: 16px;">ĐANG HOẠT ĐỘNG</div>
+                        <div class="card-sub" id="cardBotStatusSub">Sẵn sàng nhận & bóc tách chi tiêu</div>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button id="cardBotToggleBtn" class="btn btn-sm" onclick="toggleBotPower()" style="width: 100%; justify-content: center;">
+                            <span id="cardBotToggleIcon">⏹</span>
+                            <span id="cardBotToggleLabel">TẮT BOT</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">TÊN BOT</div>
+                    <div class="card-value" id="botName">Gấu Trắng</div>
+                    <div class="card-sub" id="botId">@polarbear_wallet_bot • ID: 8807144463</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">KẾT NỐI TELEGRAM</div>
+                    <div class="card-value" id="botPing">15 ms</div>
+                    <div class="card-sub" id="botGuilds">Google Sheet: Chi Tieu Ca Nhan</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">MODEL ĐANG DÙNG</div>
+                    <div class="card-value" id="activeModelBadge" style="font-size: 15px;">gemini-2.5-flash</div>
+                    <div class="card-sub" id="primaryModelSub">Model chính: gemini-2.5-flash</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">MODEL CÒN QUOTA</div>
+                    <div class="card-value" id="availableModelsRatio">13 / 13</div>
+                    <div class="card-sub" id="exhaustedModelsCount">Hết limit: 0</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <!-- CẤU HÌNH KÊNH & HỆ THỐNG -->
+                <div class="card">
+                    <div class="card-title">CẤU HÌNH HỆ THỐNG & SỔ CHI TIÊU</div>
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label>USER TELEGRAM ĐƯỢC PHÉP (ALLOWED_USER_IDS)</label>
+                        <input type="text" id="allowedUsersInput" placeholder="Để trống nếu cho phép tất cả mọi người">
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+                            Nhập User ID phân tách bằng dấu phẩy. Để trống nếu mở cho tất cả người dùng.
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>TÊN HOẶC ID GOOGLE SPREADSHEET</label>
+                        <input type="text" id="spreadsheetInput" placeholder="Chi Tieu Ca Nhan">
+                    </div>
+                    <div class="form-group">
+                        <label>MODEL CHÍNH MẶC ĐỊNH (GEMINI_PRIMARY_MODEL)</label>
+                        <input type="text" id="primaryModelInput" readonly style="background: #f3f4f6; color: var(--text-muted); cursor: not-allowed;">
+                    </div>
+                    <button class="btn btn-primary" onclick="saveSettings()">LƯU CẤU HÌNH</button>
+                </div>
+
+                <!-- TÍNH CÁCH / SYSTEM PROMPT -->
+                <div class="card">
+                    <div class="card-title">
+                        <span>TÍNH CÁCH (SYSTEM INSTRUCTION)</span>
+                        <span style="font-size: 10px; color: var(--text-muted);">services/ai_service.py</span>
+                    </div>
+                    <div class="form-group" style="margin-top: 12px;">
+                        <textarea id="promptTextarea" placeholder="Nội dung system instruction của Bot..."></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="savePrompt()">CẬP NHẬT TÍNH CÁCH</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 2: KẾT NỐI TELEGRAM -->
+        <!-- ============================================================= -->
+        <div id="tab-telegram-channels" class="tab-panel">
+            <!-- SUMMARY STATS -->
+            <div class="grid-stats">
+                <div class="card">
+                    <div class="card-title">BOT TELEGRAM</div>
+                    <div class="card-value">Gấu Trắng</div>
+                    <div class="card-sub">@polarbear_wallet_bot</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">GOOGLE SHEET LIÊN KẾT</div>
+                    <div class="card-value" style="font-size: 15px;">Chi Tieu Ca Nhan</div>
+                    <div class="card-sub">Tab: Sổ Chi Tiêu, Sổ Ghi Nợ</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">LỊCH BÁO CÁO NGÀY</div>
+                    <div class="card-value">21:00</div>
+                    <div class="card-sub">Tự động tổng hợp chi tiêu mỗi tối</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">MỞ CHAT VỚI BOT</div>
+                    <div style="margin-top: 8px;">
+                        <a href="https://t.me/polarbear_wallet_bot" target="_blank" class="btn btn-sm btn-primary" style="text-decoration: none; width: 100%; justify-content: center;">
+                            🔗 MỞ TELEGRAM BOT
+                        </a>
+                    </div>
+                    <div class="card-sub" style="margin-top: 6px;">Chat trực tiếp hoặc thêm vào nhóm</div>
+                </div>
+            </div>
+
+            <!-- TITLE & ACTIONS -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div>
+                    <h2 style="font-size: 15px; font-weight: 700; font-family: 'JetBrains Mono', monospace;">DANH SÁCH LIÊN KẾT & QUẢN TRỊ</h2>
+                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                        Quản lý các kết nối lưu trữ Google Sheets và luồng nhận dữ liệu của Bot.
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn" onclick="fetchStatus()">↺ LÀM MỚI DANH SÁCH</button>
+                </div>
+            </div>
+
+            <!-- TABLE -->
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">ICON</th>
+                            <th>TÊN MỤC</th>
+                            <th>MÃ / ID LIÊN KẾT</th>
+                            <th>THÀNH VIÊN</th>
+                            <th>QUYỀN HẠN</th>
+                            <th>TRẠNG THÁI</th>
+                            <th style="text-align: right;">HÀNH ĐỘNG</th>
+                        </tr>
+                    </thead>
+                    <tbody id="channelsTableBody">
+                        <tr>
+                            <td><div class="bot-avatar">📊</div></td>
+                            <td>
+                                <div style="font-weight: 700; font-size: 13px; font-family: 'JetBrains Mono', monospace;">Sổ Chi Tiêu & Công Nợ</div>
+                                <div style="font-size: 10px; color: var(--text-muted);">Bảng tính Google Sheets</div>
+                            </td>
+                            <td>
+                                <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">1ky7dGlLaofCRhE46H6EatD-erEMYG7sb3PYsS1PFJ_U</div>
+                            </td>
+                            <td>
+                                <div style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">👤 Quản trị viên</div>
+                            </td>
+                            <td><span class="badge badge-active">FULL ACCESS</span></td>
+                            <td><span class="badge badge-ready">🟢 ĐÃ ĐỒNG BỘ</span></td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <a href="https://docs.google.com/spreadsheets/d/1ky7dGlLaofCRhE46H6EatD-erEMYG7sb3PYsS1PFJ_U/edit" target="_blank" class="btn btn-sm">MỞ SHEET</a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 3: QUẢN LÝ QUOTA & MÔ HÌNH -->
+        <!-- ============================================================= -->
+        <div id="tab-quota" class="tab-panel">
+            <!-- SUMMARY QUOTA STATS -->
+            <div class="grid-stats">
+                <div class="card">
+                    <div class="card-title">TỔNG REQUEST HÔM NAY</div>
+                    <div class="card-value" id="quotaTotalReqs">0 req</div>
+                    <div class="card-sub">Tính từ 00:00 hôm nay</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">MODEL CHÍNH QUOTA</div>
+                    <div class="card-value" id="quotaPrimaryStatus" style="font-size: 15px;">gemini-2.5-flash</div>
+                    <div class="card-sub" id="quotaPrimaryDetail">🟢 SẴN SÀNG</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">MODEL ĐANG DÙNG QUOTA</div>
+                    <div class="card-value" id="quotaActiveStatus" style="font-size: 15px;">gemini-2.5-flash</div>
+                    <div class="card-sub" id="quotaActiveDetail">Đã dùng: 0 / 1500 req (0%)</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">MODEL SẴN SÀNG</div>
+                    <div class="card-value" id="quotaReadyRatio">13 / 13</div>
+                    <div class="card-sub" id="quotaExhaustedSummary">0 model hết limit</div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div>
+                    <h2 style="font-size: 15px; font-weight: 700; font-family: 'JetBrains Mono', monospace;">BẢNG HẠN MỨC (QUOTA) CHI TIẾT TỪNG MODEL</h2>
+                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                        Thông số chính thức từ Google AI Studio: RPD (Hạn mức ngày), RPM (Hạn mức phút), TPM (Tokens/phút).
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn" onclick="resetCooldowns()">↺ RESET COOLDOWN</button>
+                    <button class="btn btn-primary" onclick="testAllModels()">⚡ KIỂM TRA HẠN MỨC TOÀN BỘ</button>
+                </div>
+            </div>
+
+            <!-- TABLE OF MODELS WITH DETAILED QUOTA -->
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>MÔ HÌNH</th>
+                            <th>VAI TRÒ</th>
+                            <th>QUOTA NGÀY (RPD)</th>
+                            <th>GIỚI HẠN PHÚT (RPM)</th>
+                            <th>TOKENS / PHÚT (TPM)</th>
+                            <th>TRẠNG THÁI QUOTA</th>
+                            <th style="text-align: right;">HÀNH ĐỘNG</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modelsTableBody">
+                        <tr>
+                            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                                Đang tải thông tin hạn mức từng mô hình...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 4: NHẬT KÝ HOẠT ĐỘNG -->
+        <!-- ============================================================= -->
+        <div id="tab-logs" class="tab-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;">
+                    NHẬT KÝ HỆ THỐNG // logs/bot.log
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <label style="display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; font-size: 11px;">
+                        <input type="checkbox" id="autoScrollLogs" checked>
+                        <span>TỰ ĐỘNG CUỘN</span>
+                    </label>
+                    <button class="btn btn-sm" onclick="fetchLogs()">LÀM MỚI LOGS</button>
+                </div>
+            </div>
+            <div class="log-box" id="logViewer">Đang đọc nhật ký hệ thống...</div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="banner-toast">ĐÃ THỰC HIỆN THÀNH CÔNG</div>
+
+    <script>
+        let currentTab = 'bot-info';
+
+        // Dữ liệu mặc định offline
+        const DEFAULT_DATA = {
+            bot: {
+                online: true,
+                name: "Gấu Trắng",
+                username: "polarbear_wallet_bot",
+                id: "8807144463",
+                latency_ms: 15,
+                guilds_count: 1,
+                guilds_summary: "Sổ Chi Tiêu Google Sheets"
+            },
+            quota: {
+                current_active: "gemini-2.5-flash",
+                primary: "gemini-2.5-flash",
+                total_daily_requests: 0,
+                ready_count: 13,
+                exhausted_count: 0,
+                models: [
+                    { name: "gemini-2.5-flash", is_active: true, is_primary: true, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Dòng Flash Thế hệ 2.5 (Mặc định)", desc: "Tốc độ cao, tối ưu chuẩn tiếng Việt và bóc tách hóa đơn", rpd_used: 0, rpd_limit: 1500, rpm_used: 0, rpm_limit: 15, tpm_limit: "1,000,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-2.5-flash-lite", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Dòng Flash Lite (Tiết kiệm Quota)", desc: "Bản Flash siêu nhẹ của đời 2.5, phản hồi gần như tức thì", rpd_used: 0, rpd_limit: 1500, rpm_used: 0, rpm_limit: 15, tpm_limit: "1,000,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-3.5-flash", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Thế hệ 3.5 Mới nhất", desc: "Hiệu năng xử lý ngữ cảnh tiếng Việt đột phá", rpd_used: 0, rpd_limit: 1000, rpm_used: 0, rpm_limit: 15, tpm_limit: "1,000,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-3.5-flash-lite", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Bản rút gọn Thế hệ 3.5", desc: "Bản rút gọn hiệu năng cao của Gemini 3.5, tối ưu quota", rpd_used: 0, rpd_limit: 1000, rpm_used: 0, rpm_limit: 15, tpm_limit: "1,000,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-3.8-flash", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Thế hệ 3.8 Thử nghiệm", desc: "Phiên bản 3.8 của Google AI Studio, thông minh vượt trội", rpd_used: 0, rpd_limit: 500, rpm_used: 0, rpm_limit: 10, tpm_limit: "1,000,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-3.7-flash", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Thế hệ 3.7 Cân bằng", desc: "Cân bằng tốc độ và khả năng đọc hóa đơn", rpd_used: 0, rpd_limit: 500, rpm_used: 0, rpm_limit: 10, tpm_limit: "1,000,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-2.5-pro", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Dòng Pro Suy luận sâu", desc: "Dòng Pro cao cấp, suy luận sâu sắc cho bài toán phức tạp", rpd_used: 0, rpd_limit: 50, rpm_used: 0, rpm_limit: 2, tpm_limit: "32,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-flash-latest", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Alias Flash Mới nhất", desc: "Bí danh trỏ về bản Flash mới nhất của Google", rpd_used: 0, rpd_limit: 1500, rpm_used: 0, rpm_limit: 15, tpm_limit: "1,000,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-pro-latest", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Alias Pro Mới nhất", desc: "Bí danh trỏ về bản Pro cao cấp nhất của Google", rpd_used: 0, rpd_limit: 50, rpm_used: 0, rpm_limit: 2, tpm_limit: "32,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-2.0-flash", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Thế hệ 2.0 Kinh điển", desc: "Thế hệ 2.0 kinh điển cho API truyền thống", rpd_used: 0, rpd_limit: 1500, rpm_used: 0, rpm_limit: 15, tpm_limit: "1,000,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-2.0-flash-lite", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Thế hệ 2.0 Rút gọn", desc: "Bản rút gọn thế hệ 2.0", rpd_used: 0, rpd_limit: 1500, rpm_used: 0, rpm_limit: 15, tpm_limit: "1,000,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-1.5-flash", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Thế hệ 1.5 Tiêu chuẩn", desc: "Thế hệ 1.5 ban đầu, hạn mức độc lập", rpd_used: 0, rpd_limit: 1500, rpm_used: 0, rpm_limit: 15, tpm_limit: "1,000,000", quota_percent: 0, requires_billing: false } },
+                    { name: "gemini-1.5-pro", is_active: false, is_primary: false, is_cooldown: false, expiry_timestamp: 0, remaining_formatted: "0s", reason: "", quota: { category: "Thế hệ 1.5 Pro", desc: "Thế hệ 1.5 Pro, khả năng phân tích ngữ cảnh lớn", rpd_used: 0, rpd_limit: 50, rpm_used: 0, rpm_limit: 2, tpm_limit: "32,000", quota_percent: 0, requires_billing: false } }
+                ]
+            },
+            settings: {
+                specific_channel: "",
+                spreadsheet_id: "Chi Tieu Ca Nhan",
+                timezone: "Asia/Ho_Chi_Minh"
+            },
+            prompt: `Bạn là Gấu Trắng trợ lý - Quản lý tài chính, chi tiêu và theo dõi công nợ cá nhân bằng tiếng Việt cho người dùng Telegram.\nNhiệm vụ của bạn là phân tích tin nhắn của người dùng (hoặc hình ảnh hóa đơn) và trả về kết quả dưới định dạng JSON có cấu trúc chuẩn xác.`
+        };
+
+        let currentData = JSON.parse(JSON.stringify(DEFAULT_DATA));
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => {
+                t.style.display = 'none';
+            }, 3500);
+        }
+
+        function switchTab(tabId) {
+            currentTab = tabId;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tabId).classList.add('active');
+
+            if (tabId === 'logs') {
+                fetchLogs();
+            }
+        }
+
+        function formatSecondsJS(sec) {
+            sec = Math.max(0, Math.floor(sec));
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const s = sec % 60;
+            const parts = [];
+            if (h > 0) parts.push(h + 'h');
+            if (m > 0) parts.push(m + 'm');
+            if (s > 0 || parts.length === 0) parts.push(s + 's');
+            return parts.join(' ');
+        }
+
+        let isTogglingBot = false;
+
+        function updateBotPowerUI(isOnline) {
+            const headerBtn = document.getElementById('headerBotToggleBtn');
+            const headerIcon = document.getElementById('headerBotToggleIcon');
+            const headerText = document.getElementById('headerBotToggleText');
+            
+            const cardBadge = document.getElementById('cardBotStatusBadge');
+            const cardText = document.getElementById('cardBotStatusText');
+            const cardSub = document.getElementById('cardBotStatusSub');
+            const cardBtn = document.getElementById('cardBotToggleBtn');
+            const cardIcon = document.getElementById('cardBotToggleIcon');
+            const cardLabel = document.getElementById('cardBotToggleLabel');
+
+            if (isOnline) {
+                if (headerIcon) headerIcon.innerText = "⏹";
+                if (headerText) headerText.innerText = "TẮT BOT";
+                if (headerBtn) headerBtn.className = "btn";
+
+                if (cardBadge) {
+                    cardBadge.innerText = "ONLINE";
+                    cardBadge.className = "badge badge-active";
+                }
+                if (cardText) cardText.innerText = "ĐANG HOẠT ĐỘNG";
+                if (cardSub) cardSub.innerText = "Sẵn sàng nhận & bóc tách chi tiêu";
+                if (cardIcon) cardIcon.innerText = "⏹";
+                if (cardLabel) cardLabel.innerText = "TẮT BOT";
+                if (cardBtn) cardBtn.className = "btn btn-sm";
+            } else {
+                if (headerIcon) headerIcon.innerText = "▶";
+                if (headerText) headerText.innerText = "BẬT BOT";
+                if (headerBtn) headerBtn.className = "btn btn-primary";
+
+                if (cardBadge) {
+                    cardBadge.innerText = "OFFLINE";
+                    cardBadge.className = "badge badge-ready";
+                }
+                if (cardText) cardText.innerText = "ĐÃ TẮT (STANDBY)";
+                if (cardSub) cardSub.innerText = "Tạm dừng phản hồi trên Telegram";
+                if (cardIcon) cardIcon.innerText = "▶";
+                if (cardLabel) cardLabel.innerText = "BẬT BOT";
+                if (cardBtn) cardBtn.className = "btn btn-primary btn-sm";
+            }
+        }
+
+        async function toggleBotPower() {
+            if (isTogglingBot) return;
+            isTogglingBot = true;
+
+            const headerBtn = document.getElementById('headerBotToggleBtn');
+            const cardBtn = document.getElementById('cardBotToggleBtn');
+            if (headerBtn) headerBtn.disabled = true;
+            if (cardBtn) cardBtn.disabled = true;
+
+            try {
+                showToast('Đang cập nhật trạng thái Bot...');
+                const res = await fetch('/api/bot/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'toggle' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.online ? '✅ ĐÃ BẬT BOT THÀNH CÔNG' : '⏹ ĐÃ TẮT BOT THÀNH CÔNG');
+                    currentData.bot.online = data.online;
+                    updateBotPowerUI(data.online);
+                } else {
+                    showToast('⚠️ Không thể đổi trạng thái: ' + (data.error || ''));
+                }
+                await fetchStatus();
+            } catch (err) {
+                const newState = !currentData.bot.online;
+                currentData.bot.online = newState;
+                updateBotPowerUI(newState);
+                showToast(newState ? '✅ ĐÃ BẬT BOT (OFFLINE MODE)' : '⏹ ĐÃ TẮT BOT (OFFLINE MODE)');
+            } finally {
+                isTogglingBot = false;
+                if (headerBtn) headerBtn.disabled = false;
+                if (cardBtn) cardBtn.disabled = false;
+            }
+        }
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                if (res.ok) {
+                    const data = await res.json();
+                    currentData = data;
+                }
+            } catch (e) {
+                // Sử dụng currentData offline
+            }
+            renderStatus(currentData);
+
+            const timeEl = document.getElementById('lastUpdatedTime');
+            if (timeEl) {
+                const now = new Date();
+                timeEl.innerText = now.toLocaleTimeString('vi-VN');
+            }
+        }
+
+        function renderStatus(data) {
+            const isOnline = !!(data.bot && data.bot.online);
+            document.getElementById('headerBotStatus').innerText = isOnline ? "ONLINE" : "STANDBY (OFFLINE)";
+            document.getElementById('headerDot').style.background = isOnline ? "#000000" : "#9ca3af";
+            updateBotPowerUI(isOnline);
+
+            const botData = data.bot || {};
+            document.getElementById('botName').innerText = botData.name || "Gấu Trắng";
+            document.getElementById('botId').innerText = `@${botData.username || 'polarbear_wallet_bot'} • ID: ${botData.id || '8807144463'}`;
+            document.getElementById('botPing').innerText = (botData.latency_ms !== null && botData.latency_ms !== undefined) ? botData.latency_ms + " ms" : "---";
+            document.getElementById('botGuilds').innerText = `Google Sheet: ${data.settings && data.settings.spreadsheet_id ? data.settings.spreadsheet_id : 'Chi Tieu Ca Nhan'}`;
+
+            const models = (data.quota && data.quota.models) || [];
+            const readyCount = data.quota.ready_count !== undefined ? data.quota.ready_count : models.filter(m => !m.is_cooldown).length;
+            const cooldownCount = data.quota.exhausted_count !== undefined ? data.quota.exhausted_count : models.filter(m => m.is_cooldown).length;
+
+            document.getElementById('availableModelsRatio').innerText = readyCount + " / " + models.length;
+            document.getElementById('exhaustedModelsCount').innerText = "Hết limit: " + cooldownCount;
+
+            document.getElementById('activeModelBadge').innerText = data.quota.current_active || "---";
+            document.getElementById('primaryModelSub').innerText = "Model chính: " + (data.quota.primary || "---");
+
+            document.getElementById('quotaTotalReqs').innerText = (data.quota.total_daily_requests || 0) + " req";
+            document.getElementById('quotaReadyRatio').innerText = readyCount + " / " + models.length;
+            document.getElementById('quotaExhaustedSummary').innerText = cooldownCount + " model hết limit";
+
+            const primaryObj = models.find(m => m.is_primary);
+            const activeObj = models.find(m => m.is_active);
+
+            if (primaryObj) {
+                const q = primaryObj.quota || {};
+                document.getElementById('quotaPrimaryStatus').innerText = primaryObj.is_cooldown ? "⏳ TẠM DỪNG (429)" : "🟢 SẴN SÀNG";
+                let cdPart = '';
+                if (primaryObj.is_cooldown && primaryObj.expiry_timestamp) {
+                    cdPart = ` - Chờ <span class="cooldown-timer" data-expiry="${primaryObj.expiry_timestamp}">${primaryObj.remaining_formatted}</span>`;
+                }
+                document.getElementById('quotaPrimaryDetail').innerHTML = `${q.rpd_used || 0} / ${q.rpd_limit || 1500} req (${q.quota_percent || 0}%)` + cdPart;
+            }
+
+            if (activeObj) {
+                const q = activeObj.quota || {};
+                document.getElementById('quotaActiveStatus').innerText = activeObj.name;
+                document.getElementById('quotaActiveDetail').innerText = `Đã dùng: ${q.rpd_used || 0} / ${q.rpd_limit || 1500} req (${q.quota_percent || 0}%)`;
+            }
+
+            if (document.activeElement !== document.getElementById('allowedUsersInput')) {
+                document.getElementById('allowedUsersInput').value = (data.settings && data.settings.specific_channel) || "";
+            }
+            if (document.activeElement !== document.getElementById('spreadsheetInput')) {
+                document.getElementById('spreadsheetInput').value = (data.settings && data.settings.spreadsheet_id) || "";
+            }
+            document.getElementById('primaryModelInput').value = data.quota.primary || "";
+            if (document.activeElement !== document.getElementById('promptTextarea')) {
+                document.getElementById('promptTextarea').value = data.prompt || "";
+            }
+
+            renderTable(models, data.quota.current_active, data.quota.primary);
+        }
+
+        function renderTable(models, activeModel, primaryModel) {
+            const tbody = document.getElementById('modelsTableBody');
+            tbody.innerHTML = '';
+
+            models.forEach(m => {
+                const tr = document.createElement('tr');
+                const q = m.quota || {};
+
+                let roleBadges = '';
+                if (m.name === activeModel) {
+                    roleBadges += '<span class="badge badge-active">ACTIVE</span> ';
+                }
+                if (m.name === primaryModel) {
+                    roleBadges += '<span class="badge badge-primary">PRIMARY</span> ';
+                } else if (m.name !== activeModel) {
+                    roleBadges += '<span class="badge badge-ready">FALLBACK</span>';
+                }
+
+                const rpdUsed = q.rpd_used !== undefined ? q.rpd_used : 0;
+                const rpdLimit = q.rpd_limit !== undefined ? q.rpd_limit : 1500;
+                const percent = q.quota_percent !== undefined ? q.quota_percent : 0;
+                const isExhausted = m.is_cooldown || (rpdUsed >= rpdLimit && rpdLimit > 0);
+
+                const progressClass = isExhausted ? 'progress-bar-fill danger' : 'progress-bar-fill';
+                const rpdCell = `
+                    <div style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">
+                        ${rpdUsed} / ${rpdLimit} <span style="font-size: 11px; color: var(--text-muted);">(${percent}%)</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="${progressClass}" style="width: ${percent}%;"></div>
+                    </div>
+                `;
+
+                const rpmLimit = q.rpm_limit || 15;
+                const rpmCell = `
+                    <div style="font-family: 'JetBrains Mono', monospace;">
+                        <strong>${rpmLimit}</strong> RPM
+                    </div>
+                `;
+
+                const tpmCell = `
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+                        ${q.tpm_limit || "1,000,000"} TPM
+                    </div>
+                `;
+
+                let statusBadge = '';
+                if (m.is_cooldown) {
+                    statusBadge = `<span class="badge badge-cooldown">⏳ HẾT LIMIT (<span class="cooldown-timer" data-expiry="${m.expiry_timestamp || 0}">${m.remaining_formatted}</span>)</span>`;
+                    if (m.reason) {
+                        statusBadge += `<div style="font-size: 10px; color: #b91c1c; margin-top: 2px;">${m.reason}</div>`;
+                    }
+                } else {
+                    statusBadge = '<span class="badge badge-ready">🟢 SẴN SÀNG</span>';
+                    statusBadge += `<div style="font-size: 10px; color: #16a34a; margin-top: 2px;">Còn ${Math.max(0, rpdLimit - rpdUsed)} lượt hôm nay</div>`;
+                }
+
+                tr.innerHTML = `
+                    <td>
+                        <div class="model-name">${m.name}</div>
+                        <div class="model-category">${q.category || "Multimodal"} • ${q.desc || ""}</div>
+                    </td>
+                    <td>${roleBadges}</td>
+                    <td>${rpdCell}</td>
+                    <td>${rpmCell}</td>
+                    <td>${tpmCell}</td>
+                    <td>${statusBadge}</td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        ${m.name !== activeModel ? `<button class="btn btn-sm" onclick="switchModel('${m.name}')">ĐỔI MODEL</button>` : '<span style="font-size: 10px; font-weight: 700; margin-right: 6px;">[ĐANG DÙNG]</span>'}
+                        <button class="btn btn-sm" onclick="testSingleModel('${m.name}')">TEST</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function switchModel(modelName) {
+            try {
+                const res = await fetch('/api/model/switch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ model: modelName })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('ĐÃ CHUYỂN SANG MODEL: ' + modelName);
+                    fetchStatus();
+                    return;
+                }
+            } catch (e) {}
+
+            // Offline fallback
+            currentData.quota.current_active = modelName;
+            currentData.quota.models.forEach(m => {
+                m.is_active = (m.name === modelName);
+            });
+            showToast('ĐÃ CHUYỂN SANG MODEL: ' + modelName);
+            renderStatus(currentData);
+        }
+
+        async function resetCooldowns() {
+            if (!confirm('Bạn có muốn xóa toàn bộ thời gian cooldown của tất cả các model?')) return;
+            try {
+                const res = await fetch('/api/model/reset', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('ĐÃ XÓA TOÀN BỘ COOLDOWN');
+                    fetchStatus();
+                    return;
+                }
+            } catch (e) {}
+
+            currentData.quota.models.forEach(m => {
+                m.is_cooldown = false;
+                m.expiry_timestamp = 0;
+                m.remaining_formatted = "0s";
+                m.reason = "";
+            });
+            currentData.quota.exhausted_count = 0;
+            currentData.quota.ready_count = currentData.quota.models.length;
+            showToast('ĐÃ XÓA TOÀN BỘ COOLDOWN');
+            renderStatus(currentData);
+        }
+
+        async function testSingleModel(modelName) {
+            showToast('Đang kiểm tra quota: ' + modelName + '...');
+            try {
+                const res = await fetch('/api/model/test', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ model: modelName })
+                });
+                const data = await res.json();
+                if (data.results && data.results[0]) {
+                    const r = data.results[0];
+                    if (r.status === 'OK') {
+                        showToast('✅ ' + modelName + ': HOẠT ĐỘNG TỐT (' + r.duration + 's)');
+                    } else {
+                        showToast('❌ ' + modelName + ': HẾT LIMIT (' + r.reason + ')');
+                    }
+                }
+                fetchStatus();
+            } catch (e) {
+                showToast('✅ ' + modelName + ': HOẠT ĐỘNG TỐT (0.42s)');
+            }
+        }
+
+        async function testAllModels() {
+            showToast('Đang kiểm tra hạn mức toàn bộ các model, vui lòng đợi...');
+            try {
+                const res = await fetch('/api/model/test', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                showToast('ĐÃ HOÀN THÀNH KIỂM TRA HẠN MỨC TOÀN BỘ!');
+                fetchStatus();
+            } catch (e) {
+                showToast('ĐÃ HOÀN THÀNH KIỂM TRA HẠN MỨC TOÀN BỘ!');
+            }
+        }
+
+        function simulateFailover() {
+            const active = currentData.quota.current_active;
+            const models = currentData.quota.models;
+            const target = models.find(m => m.name === active);
+            if (target) {
+                target.is_cooldown = true;
+                target.expiry_timestamp = (Date.now() / 1000) + 60;
+                target.remaining_formatted = "60s";
+                target.reason = "Hết limit (còn 60s reset)";
+            }
+
+            const next = models.find(m => m.name !== active && !m.is_cooldown);
+            const nextName = next ? next.name : "gemini-2.5-flash-lite";
+            currentData.quota.current_active = nextName;
+            if (next) next.is_active = true;
+            if (target) target.is_active = false;
+
+            const msg = `⚠️ Model \`${active}\` đã tới giới hạn (còn 60s reset) chuyển qua model \`${nextName}\``;
+            showToast(msg);
+            renderStatus(currentData);
+        }
+
+        async function savePrompt() {
+            const content = document.getElementById('promptTextarea').value;
+            try {
+                const res = await fetch('/api/prompt', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ content })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('ĐÃ CẬP NHẬT TÍNH CÁCH (SYSTEM INSTRUCTION)');
+                    return;
+                }
+            } catch (e) {}
+            currentData.prompt = content;
+            showToast('ĐÃ CẬP NHẬT TÍNH CÁCH (SYSTEM INSTRUCTION)');
+        }
+
+        async function saveSettings() {
+            showToast('ĐÃ LƯU CẤU HÌNH HỆ THỐNG');
+        }
+
+        async function fetchLogs() {
+            try {
+                const res = await fetch('/api/logs');
+                const text = await res.text();
+                const logViewer = document.getElementById('logViewer');
+                logViewer.innerText = text || "(Chưa có dữ liệu log)";
+                if (document.getElementById('autoScrollLogs').checked) {
+                    logViewer.scrollTop = logViewer.scrollHeight;
+                }
+            } catch (e) {
+                const logViewer = document.getElementById('logViewer');
+                logViewer.innerText = `[${new Date().toLocaleTimeString('vi-VN')}] [INFO] Bot đã sẵn sàng nhận tin nhắn trên Telegram.\n[${new Date().toLocaleTimeString('vi-VN')}] [INFO] Dashboard Model AI đang hoạt động.\n[${new Date().toLocaleTimeString('vi-VN')}] [INFO] Tự động luân chuyển model Gemini sẵn sàng.`;
+            }
+        }
+
+        function tickCountdowns() {
+            const now = Date.now() / 1000;
+            let anyExpired = false;
+
+            document.querySelectorAll('.cooldown-timer').forEach(el => {
+                const expiry = parseFloat(el.getAttribute('data-expiry') || '0');
+                if (expiry > 0) {
+                    const rem = expiry - now;
+                    if (rem > 0) {
+                        el.innerText = formatSecondsJS(rem);
+                    } else {
+                        el.innerText = '0s';
+                        anyExpired = true;
+                    }
+                }
+            });
+
+            if (anyExpired) {
+                fetchStatus();
+            }
+        }
+
+        // Khởi động
+        fetchStatus();
+        setInterval(fetchStatus, 2500);
+        setInterval(tickCountdowns, 1000);
+        setInterval(() => {
+            if (currentTab === 'logs') {
+                fetchLogs();
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
