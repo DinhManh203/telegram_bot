@@ -124,7 +124,6 @@ def parse_reset_time_info(error_text: str) -> Tuple[str, float]:
     Trích xuất chuỗi hiển thị thời gian reset và số giây cooldown từ lỗi của Google Gemini API.
     Ví dụ: 'Please retry in 15h55m54.801153382s' -> ('15h55m55s', 57355.0)
     """
-    # 1. Trích xuất từ retryDelay: '57354s' hoặc retryDelay: 57354
     m_delay = re.search(r"retryDelay['\":\s]+(\d+)s?", error_text, re.IGNORECASE)
     if m_delay:
         sec = int(m_delay.group(1))
@@ -141,7 +140,6 @@ def parse_reset_time_info(error_text: str) -> Tuple[str, float]:
             disp = f"{sec}s"
         return disp, cooldown
 
-    # 2. Trích xuất từ regex "retry in/after" hoặc "try again in"
     m_text = re.search(
         r"(?:retry\s+(?:in|after)|try again in)\s+([0-9a-zA-Z\.\s]+?)(?=[,\n;]|\.\s|\.$|$|details)",
         error_text,
@@ -149,7 +147,6 @@ def parse_reset_time_info(error_text: str) -> Tuple[str, float]:
     )
     if m_text:
         raw_val = m_text.group(1).strip()
-        # Chuyển đổi số thập phân: 24.5s -> 25s, 15h55m54.8s -> 15h55m55s
         def clean_decimal(match):
             val = float(match.group(1) + "." + match.group(2))
             unit = match.group(3) or ""
@@ -181,7 +178,6 @@ def parse_reset_time_info(error_text: str) -> Tuple[str, float]:
         elif clean_val:
             return clean_val, 60.0
 
-    # 3. Trích xuất từ "resets in X"
     m_reset = re.search(
         r"(?:resets? in)\s+([0-9a-zA-Z\.\s]+?)(?=[,\n;]|\.\s|\.$|$|details)",
         error_text,
@@ -361,18 +357,14 @@ class AIService:
     def get_candidate_models(self) -> List[str]:
         """Lấy danh sách các model Gemini ưu tiên để thử gọi."""
         now = time.time()
-        # Lọc các model hợp lệ (chưa bị 404)
         valid_models = [m for m in self.models if m not in self.discontinued_models]
         if not valid_models:
             valid_models = list(self.models)
 
-        # Ưu tiên các model chưa hết hạn mức / không trong cooldown
         ready_models = [m for m in valid_models if self.model_cooldowns.get(m, 0) <= now]
         cooldown_models = [m for m in valid_models if self.model_cooldowns.get(m, 0) > now]
-        # Sắp xếp cooldown_models theo thời gian hết cooldown sớm nhất
         cooldown_models.sort(key=lambda m: self.model_cooldowns.get(m, 0))
 
-        # Nếu model hiện tại đang ready, ưu tiên nó ở đầu danh sách
         if self.current_model in ready_models:
             ready_models.remove(self.current_model)
             ready_models.insert(0, self.current_model)
@@ -466,17 +458,14 @@ class AIService:
                 err_str = str(e)
                 print(f"[AIService] Model {model_name} gặp lỗi: {err_str[:120]}")
 
-                # 1. Nếu là model không còn hỗ trợ (404)
                 if is_discontinued_error(e):
                     self.discontinued_models.add(model_name)
                     continue
 
-                # 2. Nếu là lỗi hết hạn mức / rate limit / 503 high demand
                 if is_quota_limit_error(e):
                     reset_disp, cooldown_sec = parse_reset_time_info(err_str)
                     self.model_cooldowns[model_name] = time.time() + cooldown_sec
 
-                    # Tìm model kế tiếp chưa bị loại
                     next_models = [m for m in candidates[idx + 1:] if m not in self.discontinued_models]
                     if not next_models:
                         next_models = [m for m in self.models if m != model_name and m not in self.discontinued_models]
@@ -491,7 +480,6 @@ class AIService:
                     notices.append(notice)
                     continue
 
-                # 3. Lỗi khác
                 continue
 
         return {

@@ -7,7 +7,6 @@ from services.chart_service import chart_service
 from services.ai_service import ai_service
 from services.subscriber_service import save_subscriber, get_all_subscribers
 
-# Bàn phím thao tác nhanh tối giản
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
         [KeyboardButton("Báo cáo tháng"), KeyboardButton("Biểu đồ chi tiêu")],
@@ -379,7 +378,6 @@ async def pay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_chat_action("typing")
 
     import re
-    # 1. Trích xuất Mã GD nếu có
     debt_id = ""
     match = re.search(r"\b(NO[0-9A-Za-z]{6,12})\b", raw_text, re.IGNORECASE)
     if match:
@@ -388,7 +386,6 @@ async def pay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         remaining_text = raw_text
 
-    # 2. Phân tích AI để bóc tách người và số tiền
     person = ""
     amount = None
     if remaining_text:
@@ -396,7 +393,6 @@ async def pay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         person = ai_res.get("person") or ""
         amount = ai_res.get("amount")
 
-    # Regex trích xuất số tiền nếu có
     if amount is None:
         m_amt = re.search(r"(\d+[\d\.,]*)\s*(k|cành|nghìn|ngàn|lốp|lít|củ|triệu|tr|m)?\b", raw_text, re.IGNORECASE)
         if m_amt:
@@ -497,7 +493,6 @@ async def unpay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         person = ai_res.get("person") or ""
         amount = ai_res.get("amount")
 
-    # Regex trích xuất số tiền nếu có
     if amount is None:
         m_amt = re.search(r"(\d+[\d\.,]*)\s*(k|cành|nghìn|ngàn|lốp|lít|củ|triệu|tr|m)?\b", raw_text, re.IGNORECASE)
         if m_amt:
@@ -638,7 +633,6 @@ async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_args = " ".join(context.args)
     matched_ids = re.findall(r"\b((?:NO|TX)[0-9A-Za-z]{6,14})\b", raw_args, re.IGNORECASE)
     if not matched_ids:
-        # Nếu người dùng chỉ gõ mã không có tiền tố NO/TX
         matched_ids = [arg.strip().upper() for arg in context.args if arg.strip()]
 
     deleted_success = []

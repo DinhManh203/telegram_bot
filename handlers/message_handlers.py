@@ -46,7 +46,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = user.id
     user_name = user.full_name or user.username or "Unknown"
 
-    # Kiểm tra các nút bấm trên bàn phím nhanh
     if text in ("📊 Báo cáo tháng", "Báo cáo tháng"):
         await report_command(update, context)
         return
@@ -69,15 +68,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await start_command(update, context)
         return
 
-    # Gửi trạng thái đang gõ phím
     await update.message.reply_chat_action("typing")
 
-    # Phân tích văn bản bằng Gemini AI (kèm cơ chế tự động luân chuyển model khi chạm giới hạn)
     ai_result = ai_service.analyze_text(text, on_model_switch=make_model_switch_notifier(update))
     intent = ai_result.get("intent", "CHAT")
     text_lower = text.lower()
 
-    # 0. Kiểm tra yêu cầu XÓA giao dịch / xóa khoản nợ theo Mã GD
     delete_keywords = ["xóa", "xoa", "delete", "hủy", "huy", "remove"]
     is_delete_request = any(kw in text_lower for kw in delete_keywords) or intent == "DELETE"
     matched_ids = re.findall(r"\b((?:NO|TX)[0-9A-Za-z]{6,14})\b", text, re.IGNORECASE)
@@ -118,10 +114,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
         return
 
-    # 1. Kiểm tra yêu cầu CHƯA TRẢ NỢ / ĐÁNH DẤU NỢ LẠI (Chuyển trạng thái sang "Nợ")
     has_unpay_action = bool(re.search(r"\b(chưa trả|chua tra|chưa nhận|chua nhan|chưa thanh toán|chua thanh toan|vẫn chưa trả|van chua tra|chưa trả nợ|chua tra no)\b", text_lower))
     
-    # 2. Kiểm tra yêu cầu ĐÃ TRẢ NỢ (Chuyển trạng thái sang "Đã trả")
     has_pay_action = bool(re.search(r"\b(đã trả|da tra|trả nợ|tra no|trả tiền|thanh toán|thanh toan|hoàn thành trả|thu nợ|thu no|đòi nợ|doi no)\b", text_lower))
     if not has_pay_action and re.search(r"\btrả\b", text_lower) and not has_unpay_action:
         has_pay_action = True
@@ -141,11 +135,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 if not ai_result.get("amount"):
                     ai_result["amount"] = debt_items[0].get("amount")
 
-    # Kiểm tra nếu là câu hỏi/xác nhận tình trạng nợ hiện tại (vd: "vẫn đang nợ", "còn nợ bao nhiêu")
     if any(q in text_lower for q in ["vẫn đang nợ", "vẫn nợ", "còn nợ", "đang nợ bao nhiêu", "nợ bao nhiêu"]):
         intent = "QUERY_DEBT"
 
-    # 1. GHI NHẬN VAY MƯỢN / GHI NỢ (LƯU VÀO TAB RIÊNG "SỔ GHI NỢ")
     if intent == "ADD_DEBT":
         debt_items = ai_result.get("debt_items", [])
         if not debt_items:
@@ -177,7 +169,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception as e:
             await update.message.reply_text(f"Lỗi ghi vào Sổ Ghi Nợ: {str(e)}")
 
-    # 2. XỬ LÝ CHUYỂN TRẠNG THÁI SỔ NỢ (ĐÃ TRẢ HOẶC CHƯA TRẢ NỢ)
     elif intent in ("PAY_DEBT", "UNPAY_DEBT"):
         target_status = "Nợ" if intent == "UNPAY_DEBT" else "Đã trả"
         person = ai_result.get("person") or ""
@@ -185,13 +176,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         amount = ai_result.get("amount")
         is_full = ai_result.get("is_full_payment", True)
 
-        # Regex trích xuất Mã GD nếu có trong câu (ví dụ NO2608205754, NO260820ABB2)
         if not debt_id:
             match = re.search(r"\b(NO[0-9A-Za-z]{6,12})\b", text, re.IGNORECASE)
             if match:
                 debt_id = match.group(1).upper()
 
-        # Nếu chưa có person, lấy từ debt_items nếu có
         if not person and not debt_id:
             debt_items = ai_result.get("debt_items", [])
             if debt_items and debt_items[0].get("person"):
@@ -199,7 +188,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 if not amount:
                     amount = debt_items[0].get("amount")
 
-        # Nếu vẫn chưa có person, bóc tách từ text: "[Tên người] chưa trả / đã trả..."
         if not person and not debt_id:
             m_person = re.search(r"([A-Za-zÀ-ỹ\s]+?)\s+(?:đã\s+|vẫn\s+|vừa\s+)?(?:trả|chưa trả|thanh toán|thu nợ)", text, re.IGNORECASE)
             if m_person:
@@ -209,7 +197,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 if m_person2:
                     person = re.sub(r"\d+.*", "", m_person2.group(1)).strip()
 
-        # Nếu chưa có amount, kiểm tra regex số tiền
         if amount is None and (not is_full or target_status == "Nợ"):
             m_amt = re.search(r"(\d+[\d\.,]*)\s*(k|cành|nghìn|ngàn|lốp|lít|củ|triệu|tr|m)?\b", text, re.IGNORECASE)
             if m_amt:
@@ -271,16 +258,13 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 parse_mode="Markdown"
             )
 
-    # 3. HỎI ĐÁP VỀ SỔ NỢ
     elif intent == "QUERY_DEBT":
         query_person = (ai_result.get("person") or "").strip()
         if not query_person:
-            # Kiểm tra xem có tên người cụ thể trong câu không
             m_q = re.search(r"(?:nợ\s+của\s+|kiểm\s+tra\s+nợ\s+)([A-Za-zÀ-ỹ\s]+)", text, re.IGNORECASE)
             if m_q:
                 query_person = re.sub(r"(?:vẫn|đang|bao nhiêu|không|nhé|ạ).*", "", m_q.group(1)).strip()
 
-        # Lọc bỏ các từ đại từ/tổng quát (không phải tên người)
         invalid_person_words = [
             "tôi", "toi", "tao", "mình", "minh", "ai", "những ai", "nhung ai", "người nào", "nguoi nao",
             "ai đó", "ai do", "ai đang", "ai nợ", "tất cả", "tat ca", "danh sách", "danh sach",
@@ -318,7 +302,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         else:
             await debt_command(update, context)
 
-    # 4. GHI NHẬN CHI TIÊU / THU NHẬP (TAB SỔ CHI TIÊU)
     elif intent == "ADD_TRANSACTION":
         transactions = ai_result.get("transactions", [])
         if not transactions:
@@ -364,7 +347,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception as e:
             await update.message.reply_text(f"Không thể lưu vào Google Sheet: {str(e)}")
 
-    # 4. HỎI ĐÁP THỐNG KÊ CHI TIÊU
     elif intent == "QUERY_STATS":
         query_info = ai_result.get("query_info", {})
         scope = query_info.get("scope", "this_month")
@@ -398,7 +380,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(resp, parse_mode="Markdown")
 
     else:
-        # Chat thông thường
         reply_msg = ai_result.get("reply_message") or "Tôi có thể giúp bạn ghi chi tiêu và quản lý sổ nợ tự động vào Google Sheet. Hãy thử nhắn: `Ăn trưa 40k` hoặc `Cho Nam vay 500k` nhé!"
         await update.message.reply_text(reply_msg)
 

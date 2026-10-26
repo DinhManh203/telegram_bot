@@ -12,7 +12,6 @@ def load_subscribers() -> Set[int]:
     subs = set()
     loaded_from_local = False
 
-    # 1. Đọc từ local cache nếu tồn tại
     if os.path.exists(SUBSCRIBERS_FILE):
         try:
             with open(SUBSCRIBERS_FILE, "r", encoding="utf-8") as f:
@@ -28,14 +27,12 @@ def load_subscribers() -> Set[int]:
         except Exception as e:
             print(f"Lỗi đọc file subscribers.json: {e}")
 
-    # 2. Nếu local cache rỗng (ví dụ sau khi server restart/redeploy), đọc từ Google Sheet
     if not loaded_from_local:
         try:
             sheet_subs = sheets_service.get_subscribers_from_sheet()
             if sheet_subs:
                 for cid in sheet_subs:
                     subs.add(cid)
-                # Ghi lại vào local cache để các lần sau đọc nhanh
                 try:
                     with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as f:
                         json.dump(list(subs), f, ensure_ascii=False, indent=2)
@@ -44,7 +41,6 @@ def load_subscribers() -> Set[int]:
         except Exception as e:
             print(f"Lỗi tải subscribers từ Google Sheet: {e}")
 
-    # 3. Kết hợp với ALLOWED_USER_IDS nếu được cấu hình
     if config.ALLOWED_USER_IDS:
         for uid in config.ALLOWED_USER_IDS:
             subs.add(uid)
@@ -70,7 +66,6 @@ def save_subscriber(chat_id: int, user_name: str = ""):
             with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as f:
                 json.dump(list(subs), f, ensure_ascii=False, indent=2)
 
-        # Lưu/cập nhật vào Google Sheet (chạy ngầm để tối ưu độ trễ phản hồi)
         threading.Thread(target=_save_to_sheet_async, args=(chat_id, user_name), daemon=True).start()
     except Exception as e:
         print(f"Lỗi lưu subscriber: {e}")

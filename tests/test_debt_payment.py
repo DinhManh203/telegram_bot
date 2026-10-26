@@ -35,7 +35,6 @@ def test_sheet_clean_and_update():
     for idx, r in enumerate(vals, start=1):
         print(f"Row {idx}: {r}")
 
-    # Xóa dòng NO260820CA4B (dòng rác tạo sai trước đó) nếu còn tồn tại
     for idx, r in enumerate(vals, start=1):
         if len(r) > 0 and r[0].strip().upper() == "NO260820CA4B":
             print(f"Đang xóa dòng rác bị tạo sai: Row {idx} ({r[0]})...")

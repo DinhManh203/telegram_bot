@@ -33,7 +33,6 @@ from handlers.message_handlers import (
 )
 from datetime import time
 
-# Cấu hình logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -189,7 +188,6 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, format, *args):
-        # Ẩn log kiểm tra cổng tự động để tránh rác log
         pass
 
 def start_health_check_server():
@@ -215,7 +213,6 @@ def start_health_check_server():
 
 def main():
     """Khởi chạy Telegram Bot."""
-    # Khởi chạy health check web server ngầm cho Render Web Service
     threading.Thread(target=start_health_check_server, daemon=True).start()
 
     if not config.TELEGRAM_BOT_TOKEN:
@@ -227,7 +224,6 @@ def main():
 
     print("Đang khởi động Telegram AI Expense Bot...")
     
-    # Cấu hình HTTPXRequest với timeout lớn hơn và cơ chế retry khi chạy trên server
     from telegram.request import HTTPXRequest
     request_client = HTTPXRequest(
         connect_timeout=30.0,
@@ -236,10 +232,8 @@ def main():
         pool_timeout=30.0
     )
 
-    # Khởi tạo Application
     app = ApplicationBuilder().token(config.TELEGRAM_BOT_TOKEN).request(request_client).build()
 
-    # Đăng ký các lệnh Command
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("huongdan", help_command))
@@ -270,20 +264,16 @@ def main():
     app.add_handler(CommandHandler("nhacnho", reminder_manual_command))
     app.add_handler(CommandHandler("testnhacnho", reminder_manual_command))
 
-    # Đăng ký xử lý tin nhắn hình ảnh (hóa đơn)
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo_message))
 
-    # Đăng ký xử lý tin nhắn văn bản (chat tự nhiên, nút bấm)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
-    # Cấu hình Cron Job tự động gửi báo cáo chi tiêu ngày lúc 21:00 hàng ngày (theo múi giờ Việt Nam)
     if app.job_queue:
         daily_time = time(hour=21, minute=0, second=0, tzinfo=config.TIMEZONE)
         app.job_queue.run_daily(daily_report_job, time=daily_time, name="daily_21h_expense_report")
         print("Đã thiết lập lịch gửi báo cáo tự động lúc 21:00 hàng ngày.")
 
     print("Bot đã sẵn sàng nhận tin nhắn trên Telegram.")
-    # Bắt đầu chạy bot với cơ chế tự động thử lại (bootstrap_retries=10)
     try:
         app.run_polling(bootstrap_retries=10, timeout=30, drop_pending_updates=True)
     except InvalidToken:

@@ -10,7 +10,6 @@ def main():
     for idx, r in enumerate(vals, start=1):
         print(f"Row {idx}: {r}")
 
-    # Xóa dòng rác NO260820CA4B nếu có
     for idx, r in enumerate(vals, start=1):
         if len(r) > 0 and r[0].strip().upper() == "NO260820CA4B":
             print(f"\n=> Xóa dòng rác tạo sai NO260820CA4B tại Row {idx}...")

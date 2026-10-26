@@ -45,11 +45,9 @@ def parse_amount(val: Any) -> int:
     if isinstance(val, (int, float)):
         return int(val)
     s = str(val).strip().replace("đ", "").replace("VNĐ", "").replace("vnd", "").replace(" ", "")
-    # Loại bỏ dấu phân cách hàng nghìn (cả dấu phẩy và dấu chấm)
     s = s.replace(",", "")
     if "." in s:
         parts = s.split(".")
-        # Nếu dấu chấm là phân cách hàng nghìn (vd: 500.000)
         if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]):
             s = "".join(parts)
     try:
@@ -121,7 +119,6 @@ class SheetsService:
             print(f"Lỗi mở bảng tính: {e}")
             return
 
-        # Lấy hoặc tạo sheet Chi Tiêu
         try:
             self.worksheet = self.spreadsheet.sheet1
             existing_values = self.worksheet.row_values(1)
@@ -169,7 +166,6 @@ class SheetsService:
             sheet_id = self.debt_worksheet.id
             body = {
                 "requests": [
-                    # 1. Dropdown List chọn Nợ / Đã trả cho cột H (startColIndex=7, endColIndex=8)
                     {
                         "setDataValidation": {
                             "range": {
@@ -192,7 +188,6 @@ class SheetsService:
                             }
                         }
                     },
-                    # 2. Quy tắc màu: "Nợ" -> Nền đỏ (#D93025), chữ vàng (#FFF066), in đậm
                     {
                         "addConditionalFormatRule": {
                             "rule": {
@@ -220,7 +215,6 @@ class SheetsService:
                             "index": 0
                         }
                     },
-                    # 3. Quy tắc màu: "Đã trả" -> Nền xanh lá đậm (#0F5132), chữ xanh lá nhạt (#D1E7DD), in đậm
                     {
                         "addConditionalFormatRule": {
                             "rule": {
@@ -264,7 +258,6 @@ class SheetsService:
             num_cols = 8 if is_debt else 6
 
             requests = [
-                # 1. Format Header cột hàng 1 (Nền đen #1F1F1F, chữ trắng in đậm, Times New Roman, căn giữa)
                 {
                     "repeatCell": {
                         "range": {
@@ -290,7 +283,6 @@ class SheetsService:
                         "fields": "userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)"
                     }
                 },
-                # 2. Reset toàn bộ vùng dữ liệu từ hàng 2 sang nền trắng, chữ thường
                 {
                     "repeatCell": {
                         "range": {
@@ -317,9 +309,7 @@ class SheetsService:
                 }
             ]
 
-            # Căn lề và numberFormat riêng cho các cột
             if not is_debt:
-                # Cột D: Số tiền (căn giữa, numberFormat)
                 requests.append({
                     "repeatCell": {
                         "range": {
@@ -338,7 +328,6 @@ class SheetsService:
                         "fields": "userEnteredFormat(horizontalAlignment,numberFormat)"
                     }
                 })
-                # Cột F: Mô Tả (căn trái)
                 requests.append({
                     "repeatCell": {
                         "range": {
@@ -357,7 +346,6 @@ class SheetsService:
                     }
                 })
             else:
-                # Cột E: Số tiền (căn giữa, numberFormat)
                 requests.append({
                     "repeatCell": {
                         "range": {
@@ -376,7 +364,6 @@ class SheetsService:
                         "fields": "userEnteredFormat(horizontalAlignment,numberFormat)"
                     }
                 })
-                # Cột G: Ghi chú (căn trái)
                 requests.append({
                     "repeatCell": {
                         "range": {
@@ -394,7 +381,6 @@ class SheetsService:
                         "fields": "userEnteredFormat(horizontalAlignment)"
                     }
                 })
-                # Cột H: Trạng thái (in đậm)
                 requests.append({
                     "repeatCell": {
                         "range": {
@@ -413,7 +399,6 @@ class SheetsService:
                     }
                 })
 
-            # 3. Quét tất cả các hàng để tìm và áp dụng định dạng Nền Xám + Chữ Đậm cho các tiêu đề Tháng / Ngày
             all_vals = ws.get_all_values()
             for row_idx, r in enumerate(all_vals[1:], start=2):
                 if not r or not r[0]:
@@ -524,7 +509,6 @@ class SheetsService:
         month_label = f"Tháng {month}"
         try:
             all_vals = ws.get_all_values()
-            # Kiểm tra xem tiêu đề tháng này đã xuất hiện trong bảng chưa
             for r in all_vals:
                 if r and r[0].strip().lower() == month_label.lower():
                     return
@@ -553,7 +537,6 @@ class SheetsService:
         day_label = f"Ngày {day} tháng {month}"
         try:
             all_vals = ws.get_all_values()
-            # Kiểm tra xem tiêu đề ngày này đã xuất hiện trong bảng chưa
             for r in all_vals:
                 if r and (
                     r[0].strip().lower() == day_label.lower() or
@@ -598,7 +581,6 @@ class SheetsService:
             unit = "VNĐ"
             note = item.get("note", "")
 
-            # Trích xuất ngày & tháng của giao dịch
             parsed_dt = now
             if item.get("date"):
                 for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
@@ -645,7 +627,6 @@ class SheetsService:
                 raise Exception("Không thể mở tab 'Sổ Ghi Nợ' trên Google Sheets.")
 
         now = datetime.now(config.TIMEZONE)
-        # Đảm bảo có dòng tiêu đề ngày trước khi chèn giao dịch nợ
         self._ensure_day_header(self.debt_worksheet, day=now.day, month=now.month, is_debt=True)
 
         results = []
@@ -654,12 +635,10 @@ class SheetsService:
         for item in items:
             tx_id = "NO" + now.strftime("%y%m%d") + uuid.uuid4().hex[:4].upper()
             tx_created_time = now.strftime("%Y-%m-%d %H:%M:%S")
-            # Nếu không có ngày/tháng trong tin nhắn thì để trống ""
             debt_date = item.get("debt_date") or ""
             person = item.get("person", "Không rõ")
             amount = int(item.get("amount", 0))
             unit = "VNĐ"
-            # Nếu không có lý do thì để trống ""
             note = item.get("note") or ""
             status = item.get("status") or "Nợ"
 
@@ -723,16 +702,13 @@ class SheetsService:
                 r_status = row[7].strip()
                 r_amount = parse_amount(row[4])
 
-                # Bỏ qua hàng không có thông tin nợ
                 if not r_person or not r_id.startswith("NO"):
                     continue
 
                 is_matched = False
 
-                # 1. Khớp theo Mã GD nếu có (kể cả đang ở trạng thái nào)
                 if debt_id_clean and (debt_id_clean == r_id or debt_id_clean in r_id):
                     is_matched = True
-                # 2. Khớp theo tên người nợ
                 elif person_clean and r_person_lower and (person_clean in r_person_lower or r_person_lower in person_clean):
                     if target_status == "Đã trả" and r_status != "Đã trả":
                         is_matched = True
@@ -744,7 +720,6 @@ class SheetsService:
                 if not is_matched:
                     continue
 
-                # Xác định số tiền và trạng thái mới
                 if target_status == "Đã trả":
                     if is_full or amount is None or amount <= 0 or amount >= r_amount:
                         paid_amount = r_amount if r_amount > 0 else (amount or 0)
@@ -755,7 +730,6 @@ class SheetsService:
                         new_amount = r_amount - amount
                         new_status = "Nợ" if new_amount > 0 else "Đã trả"
                 else:
-                    # Chuyển ngược lại sang "Nợ" (Chưa trả nợ / Chưa nhận được tiền)
                     paid_amount = 0
                     if amount is not None and amount > 0:
                         new_amount = amount
@@ -765,7 +739,6 @@ class SheetsService:
                         new_amount = amount or 0
                     new_status = "Nợ"
 
-                # Cập nhật trực tiếp lên Google Sheet: Cột E (Số tiền - col 5) và Cột H (Trạng thái - col 8)
                 self.debt_worksheet.update_cell(row_idx, 5, new_amount)
                 self.debt_worksheet.update_cell(row_idx, 8, new_status)
 
@@ -779,11 +752,9 @@ class SheetsService:
                     "note": row[6] if len(row) > 6 else ""
                 })
 
-                # Nếu khớp chính xác Mã GD thì dừng lại
                 if debt_id_clean and (debt_id_clean == r_id or debt_id_clean in r_id):
                     break
 
-                # Khấu trừ số tiền trả nếu có
                 if target_status == "Đã trả" and amount is not None and amount > 0:
                     amount -= paid_amount
                     if amount <= 0:
@@ -1007,7 +978,6 @@ class SheetsService:
 
         tx_id_clean = tx_id.strip().upper()
         
-        # Tìm trong Sổ Chi Tiêu trước
         try:
             if self.worksheet:
                 cell = self.worksheet.find(tx_id_clean, in_column=1)
@@ -1017,7 +987,6 @@ class SheetsService:
         except Exception:
             pass
 
-        # Tìm trong Sổ Ghi Nợ
         try:
             if self.debt_worksheet:
                 cell = self.debt_worksheet.find(tx_id_clean, in_column=1)
@@ -1036,7 +1005,6 @@ class SheetsService:
             if not self.spreadsheet:
                 return False
 
-        # 1. Tổ chức lại Sổ Chi Tiêu
         if self.worksheet:
             try:
                 all_vals = self.worksheet.get_all_values()
@@ -1045,7 +1013,6 @@ class SheetsService:
                     if r and len(r) >= 6 and r[0].startswith("TX"):
                         valid_rows.append(r[:6])
 
-                # Gom nhóm theo ngày
                 groups: Dict[tuple, list] = {}
                 for r in valid_rows:
                     time_str = r[1]
@@ -1064,7 +1031,6 @@ class SheetsService:
                         groups[key] = []
                     groups[key].append(r)
 
-                # Xóa toàn bộ nội dung cũ và ghi lại có dải phân cách ngày
                 self.worksheet.clear()
                 self.worksheet.update(values=[HEADERS], range_name="A1:F1")
                 self._format_worksheet(self.worksheet, is_debt=False)
@@ -1078,7 +1044,6 @@ class SheetsService:
             except Exception as e:
                 print(f"Lỗi tổ chức lại Sổ Chi Tiêu: {e}")
 
-        # 2. Tổ chức lại Sổ Ghi Nợ
         if self.debt_worksheet:
             try:
                 all_debt_vals = self.debt_worksheet.get_all_values()
@@ -1199,5 +1164,4 @@ class SheetsService:
         except Exception as e:
             print(f"Lỗi lưu subscriber vào Google Sheet: {e}")
 
-# Khởi tạo singleton instance
 sheets_service = SheetsService()
