@@ -344,13 +344,19 @@ class AIService:
         return self.is_online
 
     def _init_client(self):
-        """Khởi tạo Gemini Client."""
+        """Khởi tạo Gemini Client với timeout ngắn và tắt retry chậm."""
         if not config.GEMINI_API_KEY:
             print("Cảnh báo: GEMINI_API_KEY chưa được thiết lập.")
             return
 
         try:
-            self.client = genai.Client(api_key=config.GEMINI_API_KEY)
+            self.client = genai.Client(
+                api_key=config.GEMINI_API_KEY,
+                http_options=types.HttpOptions(
+                    timeout=10000,
+                    retry_options=types.HttpRetryOptions(attempts=1)
+                )
+            )
         except Exception as e:
             print(f"Lỗi khởi tạo Gemini Client: {e}")
 

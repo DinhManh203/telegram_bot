@@ -22,17 +22,15 @@ TIMEZONE_STR = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh").strip()
 DEFAULT_GEMINI_MODELS = [
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
-    "gemini-3.5-flash",
+    "gemini-flash-lite-latest",
+    "gemini-flash-latest",
+    "gemini-3-flash-preview",
     "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
     "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-2.5-pro",
-    "gemini-flash-latest",
     "gemini-pro-latest",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
 ]
 GEMINI_MODELS_RAW = os.getenv("GEMINI_MODELS", "").strip()
 if GEMINI_MODELS_RAW:

@@ -1,4 +1,5 @@
 import re
+import asyncio
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -18,17 +19,25 @@ from handlers.command_handlers import (
     debt_command
 )
 def make_model_switch_notifier(update: Update):
-    """Tạo callback gửi thông báo chuyển model về Telegram ngay lập tức."""
-    async def notify(switch_msg: str):
-        try:
-            if update and update.effective_message:
-                await update.effective_message.reply_text(switch_msg, parse_mode="Markdown")
-        except Exception:
+    """Tạo callback gửi thông báo chuyển model về Telegram an toàn giữa các luồng."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    def notify(switch_msg: str):
+        async def _send():
             try:
                 if update and update.effective_message:
-                    await update.effective_message.reply_text(switch_msg)
+                    await update.effective_message.reply_text(switch_msg, parse_mode="Markdown")
             except Exception:
-                pass
+                try:
+                    if update and update.effective_message:
+                        await update.effective_message.reply_text(switch_msg)
+                except Exception:
+                    pass
+        if loop and loop.is_running():
+            asyncio.run_coroutine_threadsafe(_send(), loop)
     return notify
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -70,7 +79,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await update.message.reply_chat_action("typing")
 
-    ai_result = ai_service.analyze_text(text, on_model_switch=make_model_switch_notifier(update))
+    ai_result = await asyncio.to_thread(
+        ai_service.analyze_text,
+        text,
+        make_model_switch_notifier(update)
+    )
     intent = ai_result.get("intent", "CHAT")
     text_lower = text.lower()
 
@@ -145,7 +158,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
 
         try:
-            saved_debts = sheets_service.add_debt_transactions(debt_items, user_id=user_id, user_name=user_name)
+            saved_debts = await asyncio.to_thread(sheets_service.add_debt_transactions, debt_items, user_id=user_id, user_name=user_name)
             lines = [
                 "**ĐÃ GHI VÀO SỔ GHI NỢ**",
                 "────────────────────────"
@@ -219,7 +232,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("Không nhận diện được tên người hoặc Mã GD. Bạn hãy thử nhắn lại (vd: `Tuấn Anh đã trả nợ` hoặc `Mã NO2608205754 chưa trả`).")
             return
 
-        updated_items = sheets_service.update_debt_status(
+        updated_items = await asyncio.to_thread(
+            sheets_service.update_debt_status,
             debt_id=debt_id,
             person=person,
             status=target_status,
@@ -309,7 +323,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
 
         try:
-            saved_txs = sheets_service.add_transactions(transactions, user_id=user_id, user_name=user_name)
+            saved_txs = await asyncio.to_thread(sheets_service.add_transactions, transactions, user_id=user_id, user_name=user_name)
             
             lines = [
                 "**ĐÃ GHI VÀO SỔ CHI TIÊU**",
@@ -406,14 +420,19 @@ async def handle_photo_message(update: Update, context: ContextTypes.DEFAULT_TYP
         photo_bytes = await photo_file.download_as_bytearray()
         caption = update.message.caption
 
-        ai_result = ai_service.analyze_image(bytes(photo_bytes), caption=caption, on_model_switch=make_model_switch_notifier(update))
+        ai_result = await asyncio.to_thread(
+            ai_service.analyze_image,
+            bytes(photo_bytes),
+            caption=caption,
+            on_model_switch=make_model_switch_notifier(update)
+        )
         transactions = ai_result.get("transactions", [])
 
         if not transactions:
             await status_msg.edit_text("Không thể nhận diện số tiền từ hình ảnh này. Bạn hãy thử chụp lại góc rõ hơn hoặc nhập bằng chữ nhé!")
             return
 
-        saved_txs = sheets_service.add_transactions(transactions, user_id=user_id, user_name=user_name)
+        saved_txs = await asyncio.to_thread(sheets_service.add_transactions, transactions, user_id=user_id, user_name=user_name)
 
         lines = [
             "**ĐÃ QUÉT HÓA ĐƠN VÀO SỔ CHI TIÊU**",

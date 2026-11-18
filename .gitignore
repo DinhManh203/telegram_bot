@@ -12,6 +12,7 @@ ENV/
 # Environment and secrets
 .env
 credentials.json
+credentials_minified.txt
 service_account.json
 token.json
 

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
@@ -29,17 +30,25 @@ async def check_user_access(update: Update) -> bool:
     return True
 
 def make_model_switch_notifier(update: Update):
-    """Tạo callback gửi thông báo chuyển model về Telegram ngay lập tức."""
-    async def notify(switch_msg: str):
-        try:
-            if update and update.effective_message:
-                await update.effective_message.reply_text(switch_msg, parse_mode="Markdown")
-        except Exception:
+    """Tạo callback gửi thông báo chuyển model về Telegram an toàn giữa các luồng."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    def notify(switch_msg: str):
+        async def _send():
             try:
                 if update and update.effective_message:
-                    await update.effective_message.reply_text(switch_msg)
+                    await update.effective_message.reply_text(switch_msg, parse_mode="Markdown")
             except Exception:
-                pass
+                try:
+                    if update and update.effective_message:
+                        await update.effective_message.reply_text(switch_msg)
+                except Exception:
+                    pass
+        if loop and loop.is_running():
+            asyncio.run_coroutine_threadsafe(_send(), loop)
     return notify
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -209,7 +218,7 @@ async def expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         raw_text = " ".join(context.args)
         await update.message.reply_chat_action("typing")
 
-        ai_res = ai_service.analyze_text(raw_text, on_model_switch=make_model_switch_notifier(update))
+        ai_res = await asyncio.to_thread(ai_service.analyze_text, raw_text, make_model_switch_notifier(update))
         transactions = ai_res.get("transactions", [])
 
         if not transactions:
@@ -225,7 +234,7 @@ async def expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if transactions and transactions[0].get("amount", 0) > 0:
             try:
-                saved = sheets_service.add_transactions(transactions, user_id=user_id, user_name=user_name)
+                saved = await asyncio.to_thread(sheets_service.add_transactions, transactions, user_id=user_id, user_name=user_name)
                 lines = [
                     "**ĐÃ GHI VÀO SỔ CHI TIÊU**",
                     "────────────────────────"
@@ -283,7 +292,7 @@ async def debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_chat_action("typing")
 
-        ai_res = ai_service.analyze_text(raw_text, on_model_switch=make_model_switch_notifier(update))
+        ai_res = await asyncio.to_thread(ai_service.analyze_text, raw_text, make_model_switch_notifier(update))
         debt_items = ai_res.get("debt_items", [])
 
         if not debt_items and ai_res.get("transactions"):
@@ -300,7 +309,7 @@ async def debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if debt_items and debt_items[0].get("amount", 0) > 0:
             try:
-                saved = sheets_service.add_debt_transactions(debt_items, user_id=user_id, user_name=user_name)
+                saved = await asyncio.to_thread(sheets_service.add_debt_transactions, debt_items, user_id=user_id, user_name=user_name)
                 lines = [
                     "**ĐÃ GHI VÀO SỔ GHI NỢ**",
                     "────────────────────────"
@@ -389,7 +398,7 @@ async def pay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     person = ""
     amount = None
     if remaining_text:
-        ai_res = ai_service.analyze_text(f"{remaining_text} trả nợ", on_model_switch=make_model_switch_notifier(update))
+        ai_res = await asyncio.to_thread(ai_service.analyze_text, f"{remaining_text} trả nợ", make_model_switch_notifier(update))
         person = ai_res.get("person") or ""
         amount = ai_res.get("amount")
 
@@ -489,7 +498,7 @@ async def unpay_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     person = ""
     amount = None
     if remaining_text:
-        ai_res = ai_service.analyze_text(f"{remaining_text} nợ", on_model_switch=make_model_switch_notifier(update))
+        ai_res = await asyncio.to_thread(ai_service.analyze_text, f"{remaining_text} nợ", make_model_switch_notifier(update))
         person = ai_res.get("person") or ""
         amount = ai_res.get("amount")
 
